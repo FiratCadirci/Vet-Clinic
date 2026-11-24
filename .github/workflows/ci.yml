@@ -1,0 +1,166 @@
+# VetClinic CI: backend derleme + birim/entegrasyon testleri (gerçek PostgreSQL, RLS), web tip kontrolü/lint/test/derleme, mobil tip kontrolü/lint.
+# Repo adım adım kuruluyor: "detect" işi hangi uygulamaların repoda olduğunu bulur, henüz eklenmemiş uygulamanın işi atlanır.
+# Test raporları (JUnit XML) her koşuda artifact olarak yüklenir.
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+env:
+  NODE_VERSION: '24'
+
+jobs:
+  detect:
+    name: Uygulamaları algıla
+    runs-on: ubuntu-latest
+    outputs:
+      api: ${{ steps.apps.outputs.api }}
+      web: ${{ steps.apps.outputs.web }}
+      mobile: ${{ steps.apps.outputs.mobile }}
+    steps:
+      - uses: actions/checkout@v5
+      - id: apps
+        run: |
+          echo "api=$([ -f apps/api/build.gradle ] && echo true || echo false)" >> "$GITHUB_OUTPUT"
+          echo "web=$([ -f apps/web/src/main.tsx ] && echo true || echo false)" >> "$GITHUB_OUTPUT"
+          echo "mobile=$([ -f apps/mobile/src/app/_layout.tsx ] && echo true || echo false)" >> "$GITHUB_OUTPUT"
+
+  api:
+    needs: detect
+    if: needs.detect.outputs.api == 'true'
+    name: API — derleme, birim + entegrasyon testleri (Java 21, gerçek PostgreSQL)
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_USER: vet
+          POSTGRES_PASSWORD: vet
+          POSTGRES_DB: vetclinic
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U vet -d vetclinic"
+          --health-interval 3s
+          --health-timeout 5s
+          --health-retries 20
+    env:
+      # Entegrasyon testleri (*IT) her koşuda geçici bir vet_it_* veritabanı açar, Flyway migration'larını
+      # yönetici kullanıcıyla uygular ve uygulamayı RLS'e tabi vet_app rolüyle çalıştırır.
+      VET_IT_URL: jdbc:postgresql://localhost:5432
+      VET_IT_ADMIN_USER: vet
+      VET_IT_ADMIN_PASSWORD: vet
+    defaults:
+      run:
+        working-directory: apps/api
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: '21'
+          cache: gradle
+
+      - name: Build + tests
+        run: chmod +x gradlew && ./gradlew --no-daemon build
+
+      - name: Upload API test reports
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: api-test-reports
+          path: |
+            apps/api/build/test-results/test/
+            apps/api/build/reports/tests/test/
+          if-no-files-found: warn
+          retention-days: 14
+
+  web:
+    needs: detect
+    if: needs.detect.outputs.web == 'true'
+    name: Web — typecheck, lint, unit, build
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    defaults:
+      run:
+        working-directory: apps/web
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-node@v5
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+          cache-dependency-path: package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+        working-directory: .
+
+      - name: Typecheck
+        run: npx tsc -b
+
+      - name: Lint (oxlint)
+        run: npx oxlint
+
+      - name: Unit tests
+        run: >-
+          npx vitest run --passWithNoTests
+          --reporter=default --reporter=github-actions --reporter=junit
+          --outputFile.junit=reports/unit-junit.xml
+
+      - name: Build
+        run: npx vite build
+
+      - name: Upload web test reports
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: web-test-reports
+          path: |
+            apps/web/reports/
+          if-no-files-found: warn
+          retention-days: 14
+
+  mobile:
+    needs: detect
+    if: needs.detect.outputs.mobile == 'true'
+    name: Mobile — typecheck, lint
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    defaults:
+      run:
+        working-directory: apps/mobile
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-node@v5
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+          cache-dependency-path: package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+        working-directory: .
+
+      - name: Typecheck
+        run: npx tsc --noEmit
+
+      - name: Lint (expo lint)
+        run: npx expo lint
+        env:
+          CI: 'true'
