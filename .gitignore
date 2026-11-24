@@ -1,0 +1,14 @@
+node_modules/
+dist/
+dist-seed/
+build/
+.expo/
+.env
+*.log
+coverage/
+/apps/*/reports/
+/apps/api/storage/
+*.tsbuildinfo
+docs/VetClinic_Proje_Raporu.html
+backups/
+.gradle/

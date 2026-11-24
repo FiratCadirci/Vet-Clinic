@@ -1,0 +1,13 @@
+**/node_modules
+**/dist
+**/.expo
+apps/api/storage
+**/build
+**/.gradle
+**/.env
+**/*.log
+**/coverage
+.git
+docs
+apps/mobile/*
+!apps/mobile/package.json

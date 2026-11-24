@@ -1,0 +1,32 @@
+{
+  "name": "vetclinic",
+  "private": true,
+  "workspaces": [
+    "apps/web",
+    "apps/mobile"
+  ],
+  "scripts": {
+    "db:up": "docker compose up -d",
+    "db:down": "docker compose down",
+    "api": "node scripts/gradle.mjs bootRun",
+    "web": "npm run dev -w web",
+    "mobile": "npm run start -w mobile",
+    "test": "npm run test:api && npm run test -w web",
+    "test:unit": "npm run test -w web",
+    "lint": "npm run lint -w web && npm run lint -w mobile",
+    "docs": "node docs/scripts/gen-er.mjs && node docs/scripts/export-openapi.mjs && node docs/scripts/test-report.mjs && node docs/render-diagrams.mjs && node docs/build-pdf.mjs",
+    "db:backup": "node scripts/db-backup.mjs backup",
+    "db:restore": "node scripts/db-backup.mjs restore",
+    "db:setup": "node scripts/db-setup.mjs",
+    "seed": "node scripts/seed.mjs",
+    "test:api": "node scripts/gradle.mjs test"
+  },
+  "overrides": {
+    "react": "19.3.0",
+    "react-dom": "19.3.0"
+  },
+  "devDependencies": {
+    "marked": "^18.1.3",
+    "playwright": "^1.65.0"
+  }
+}
