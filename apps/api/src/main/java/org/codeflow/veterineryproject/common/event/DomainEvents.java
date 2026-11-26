@@ -16,6 +16,16 @@ public final class DomainEvents {
                                        UUID clinicId, LocalDate nextDueAt) {
     }
 
+    /** Personel daveti oluşturuldu; bildirim modülü davet e-postasını gönderir. Token yalnızca e-posta bağlantısı içindir. */
+    public record StaffInvitedEvent(UUID organizationId, UUID invitationId, String email, String inviteToken,
+                                    String organizationName, UUID invitedByUserId) {
+    }
+
+    /** Bir ürünün şubedeki stoğu minimum seviyenin altına indi. */
+    public record StockLowEvent(UUID organizationId, UUID clinicId, UUID productId, String productName,
+                                java.math.BigDecimal quantity, java.math.BigDecimal minimum) {
+    }
+
     public record AppointmentStatusChangedEvent(UUID organizationId, UUID appointmentId, String oldStatus,
                                                 String newStatus, UUID clinicId) {
     }

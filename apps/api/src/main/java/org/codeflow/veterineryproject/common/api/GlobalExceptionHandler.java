@@ -106,8 +106,19 @@ public class GlobalExceptionHandler {
     })
     public ResponseEntity<ApiError> handleValidation(Exception ex, HttpServletRequest request) {
         Map<String, Object> details = new LinkedHashMap<>();
-        details.put("reason", ex.getMessage());
-        return response(HttpStatus.BAD_REQUEST, "VALIDATION_ERROR", "Geçersiz istek.", request, details);
+        String message = "Geçersiz istek.";
+        if (ex instanceof BindException bind && bind.hasFieldErrors()) {
+            // Alan bazında Türkçe doğrulama mesajları (spring.web.locale=tr): {"fields": {"email": "geçerli bir e-posta adresi olmalı"}}
+            Map<String, String> fields = new LinkedHashMap<>();
+            bind.getFieldErrors().forEach(e -> fields.putIfAbsent(e.getField(), e.getDefaultMessage()));
+            details.put("fields", fields);
+            message = "Geçersiz istek: " + fields.entrySet().stream()
+                    .map(e -> e.getKey() + " " + e.getValue())
+                    .collect(java.util.stream.Collectors.joining(", "));
+        } else {
+            details.put("reason", ex.getMessage());
+        }
+        return response(HttpStatus.BAD_REQUEST, "VALIDATION_ERROR", message, request, details);
     }
 
     @ExceptionHandler(org.springframework.http.converter.HttpMessageNotReadableException.class)

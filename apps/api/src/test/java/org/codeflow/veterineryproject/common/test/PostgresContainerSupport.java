@@ -73,6 +73,14 @@ public abstract class PostgresContainerSupport {
             String dbName = "vet_it_" + UUID.randomUUID().toString().replace("-", "").substring(0, 12);
             execute(externalUrl + "/postgres", "CREATE DATABASE " + dbName);
             jdbcUrl = externalUrl + "/" + dbName;
+            // Test JVM'i kapanırken geçici veritabanı silinir (sunucuda vet_it_* birikmez).
+            Runtime.getRuntime().addShutdownHook(new Thread(() -> {
+                try {
+                    execute(externalUrl + "/postgres", "DROP DATABASE IF EXISTS " + dbName + " WITH (FORCE)");
+                } catch (RuntimeException ignored) {
+                    // kapanışta sunucu erişilemiyorsa veritabanı elle silinebilir
+                }
+            }));
         } else {
             container = new PostgreSQLContainer<>("postgres:15-alpine")
                     .withDatabaseName("Veterinery")
