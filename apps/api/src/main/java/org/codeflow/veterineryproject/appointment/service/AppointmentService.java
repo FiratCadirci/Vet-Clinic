@@ -9,6 +9,7 @@ import org.codeflow.veterineryproject.appointment.repository.AppointmentJdbcRepo
 import org.codeflow.veterineryproject.appointment.repository.AppointmentJdbcRepository.Filter;
 import org.codeflow.veterineryproject.common.api.BusinessRuleException;
 import org.codeflow.veterineryproject.common.audit.AuditRecorder;
+import org.codeflow.veterineryproject.common.event.DomainEvents.AppointmentRescheduledEvent;
 import org.codeflow.veterineryproject.common.event.DomainEvents.AppointmentStatusChangedEvent;
 import org.codeflow.veterineryproject.common.pagination.PageResponse;
 import org.codeflow.veterineryproject.common.sequence.SequenceCounterRepository;
@@ -163,6 +164,7 @@ public class AppointmentService {
         AppointmentResponse existing = get(id);
         repository.reschedule(id, request.startsAt(), request.endsAt(), vet == null ? existing.veterinarianId() : vet);
         audit.record("APPOINTMENT_RESCHEDULE", "APPOINTMENT", id, row.clinicId());
+        events.publishEvent(new AppointmentRescheduledEvent(ctx.organizationId(), id, row.clinicId()));
         return get(id);
     }
 

@@ -29,4 +29,8 @@ public final class DomainEvents {
     public record AppointmentStatusChangedEvent(UUID organizationId, UUID appointmentId, String oldStatus,
                                                 String newStatus, UUID clinicId) {
     }
+
+    /** Randevunun zamanı değişti (erteleme); bildirim modülü hayvan sahibine yeni saati bildirir. */
+    public record AppointmentRescheduledEvent(UUID organizationId, UUID appointmentId, UUID clinicId) {
+    }
 }
