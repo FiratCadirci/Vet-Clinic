@@ -1,8 +1,24 @@
+import { lazy, Suspense, type ReactNode } from 'react';
+import { Center, Loader } from '@mantine/core';
 import { createBrowserRouter } from 'react-router';
 import { AppLayout } from './layout/AppLayout';
 import { LoginPage } from './pages/LoginPage';
 import { Placeholder } from './pages/Placeholder';
 
+/** Sayfalar ihtiyaç anında yüklenir (ilk açılış daha hızlı). */
+const InventoryPage = lazy(() => import('./pages/inventory/InventoryPage').then((m) => ({ default: m.InventoryPage })));
+
+const page = (node: ReactNode) => (
+  <Suspense
+    fallback={
+      <Center py="xl">
+        <Loader />
+      </Center>
+    }
+  >
+    {node}
+  </Suspense>
+);
 
 export const router = createBrowserRouter([
   { path: '/login', element: <LoginPage /> },
@@ -20,7 +36,7 @@ export const router = createBrowserRouter([
       { path: '/examinations', element: <Placeholder title="Muayeneler" /> },
       { path: '/examinations/:id', element: <Placeholder title="Muayene" /> },
       { path: '/vaccines', element: <Placeholder title="Aşılar" /> },
-      { path: '/inventory', element: <Placeholder title="Stok" /> },
+      { path: '/inventory', element: page(<InventoryPage />) },
       { path: '/sales', element: <Placeholder title="Satış ve fatura" /> },
       { path: '/sales/:id', element: <Placeholder title="Satış" /> },
       { path: '/reports', element: <Placeholder title="Raporlar" /> },
