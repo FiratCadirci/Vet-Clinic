@@ -39,6 +39,8 @@ dependencies {
     implementation 'org.springframework.boot:spring-boot-starter-security'
     implementation 'org.springframework.boot:spring-boot-starter-validation'
     implementation 'org.springframework.boot:spring-boot-starter-actuator'
+    implementation 'org.springframework.boot:spring-boot-starter-mail'
+    implementation 'com.github.librepdf:openpdf:2.0.3'
 
     implementation 'org.flywaydb:flyway-core'
     implementation 'org.flywaydb:flyway-database-postgresql'
@@ -64,4 +66,6 @@ dependencies {
 
 tasks.named('test') {
     useJUnitPlatform()
+    // Uygulama gibi testler de klinik saatiyle çalışır (CI sunucusu UTC'dedir; gece yarısı civarı gün farkı olmasın).
+    systemProperty 'user.timezone', 'Europe/Istanbul'
 }

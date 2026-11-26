@@ -19,6 +19,10 @@ public final class Permission {
     public static final String VACCINE_PROTOCOLS_MANAGE = "vaccine_protocols.manage";
     public static final String SUBSCRIPTIONS_READ = "subscriptions.read";
     public static final String COMMISSIONS_READ = "commissions.read";
+    public static final String SCHEDULE_MANAGE = "schedule.manage";
+    public static final String SERVICES_MANAGE = "services.manage";
+    public static final String BRANCHES_MANAGE = "branches.manage";
+    public static final String SUBSCRIPTIONS_MANAGE = "subscriptions.manage";
 
     private Permission() {
     }
