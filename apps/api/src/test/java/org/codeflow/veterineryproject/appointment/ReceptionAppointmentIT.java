@@ -93,7 +93,8 @@ class ReceptionAppointmentIT extends ApiTestSupport {
 
         postJson(t, CLINIC, URL + "/" + id + "/confirm", Map.of()).andExpect(status().isOk());
         postJson(t, CLINIC, URL + "/" + id + "/check-in", Map.of()).andExpect(status().isOk());
-        postJson(t, CLINIC, URL + "/" + id + "/no-show", Map.of()).andExpect(status().isUnprocessableEntity());
+        // FG-E4: geçersiz durum geçişi 409 (INVALID_STATUS_TRANSITION) döner.
+        postJson(t, CLINIC, URL + "/" + id + "/no-show", Map.of()).andExpect(status().isConflict());
 
         JsonNode got = body(getJson(t, URL + "/" + id).andExpect(status().isOk()));
         assertThat(got.path("status").asText()).isEqualTo("CHECKED_IN");

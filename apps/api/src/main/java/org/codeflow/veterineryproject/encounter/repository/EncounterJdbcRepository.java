@@ -145,6 +145,10 @@ public class EncounterJdbcRepository {
         return n != null && n > 0;
     }
 
+    public boolean animalDeceased(UUID animalId) {
+        return !jdbc.queryForList("select 1 from vet.animals where id = ? and deceased_at is not null", animalId).isEmpty();
+    }
+
     public boolean hasOpenEncounterForAppointment(UUID appointmentId) {
         Integer n = jdbc.queryForObject(
                 "select count(*) from vet.encounters where appointment_id = ? and status <> 'CLOSED'", Integer.class, appointmentId);

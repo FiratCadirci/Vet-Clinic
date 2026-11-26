@@ -7,6 +7,8 @@ import { Placeholder } from './pages/Placeholder';
 
 /** Sayfalar ihtiyaç anında yüklenir (ilk açılış daha hızlı). */
 const InventoryPage = lazy(() => import('./pages/inventory/InventoryPage').then((m) => ({ default: m.InventoryPage })));
+const OwnerDetailPage = lazy(() => import('./pages/patients/OwnerDetailPage').then((m) => ({ default: m.OwnerDetailPage })));
+const PatientsPage = lazy(() => import('./pages/patients/PatientsPage').then((m) => ({ default: m.PatientsPage })));
 
 const page = (node: ReactNode) => (
   <Suspense
@@ -30,9 +32,9 @@ export const router = createBrowserRouter([
     children: [
       { path: '/', element: <Placeholder title="Genel bakış" /> },
       { path: '/appointments', element: <Placeholder title="Randevular" /> },
-      { path: '/patients', element: <Placeholder title="Hastalar" /> },
+      { path: '/patients', element: page(<PatientsPage />) },
       { path: '/patients/:id', element: <Placeholder title="Hasta" /> },
-      { path: '/owners/:id', element: <Placeholder title="Hayvan sahibi" /> },
+      { path: '/owners/:id', element: page(<OwnerDetailPage />) },
       { path: '/examinations', element: <Placeholder title="Muayeneler" /> },
       { path: '/examinations/:id', element: <Placeholder title="Muayene" /> },
       { path: '/vaccines', element: <Placeholder title="Aşılar" /> },

@@ -8,6 +8,7 @@ import org.codeflow.veterineryproject.appointment.model.AppointmentStatus;
 import org.codeflow.veterineryproject.appointment.repository.AppointmentJdbcRepository;
 import org.codeflow.veterineryproject.appointment.repository.AppointmentJdbcRepository.Filter;
 import org.codeflow.veterineryproject.common.api.BusinessRuleException;
+import org.codeflow.veterineryproject.common.api.ConflictException;
 import org.codeflow.veterineryproject.common.audit.AuditRecorder;
 import org.codeflow.veterineryproject.common.event.DomainEvents.AppointmentRescheduledEvent;
 import org.codeflow.veterineryproject.common.event.DomainEvents.AppointmentStatusChangedEvent;
@@ -25,6 +26,7 @@ import java.time.OffsetDateTime;
 import java.util.ArrayList;
 import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
 
@@ -113,6 +115,9 @@ public class AppointmentService {
         if (!repository.animalExists(request.animalId())) {
             throw new EntityNotFoundException("Hasta bulunamadı.");
         }
+        if (repository.animalDeceased(request.animalId())) {
+            throw new ConflictException("Vefat etmiş hasta için randevu oluşturulamaz.", "PATIENT_DECEASED", Map.of());
+        }
         UUID clientId = resolveClient(request);
         if (request.veterinarianId() != null && !repository.veterinarianActive(request.veterinarianId())) {
             throw new BusinessRuleException("Veteriner hekim bulunamadı veya pasif.");
@@ -154,7 +159,8 @@ public class AppointmentService {
         AppointmentStatus current = parse(row.status());
         if (current != AppointmentStatus.REQUESTED && current != AppointmentStatus.BOOKED
                 && current != AppointmentStatus.CONFIRMED) {
-            throw new BusinessRuleException("Yalnızca bekleyen veya onaylı randevu ertelenebilir. Durum: " + current);
+            throw invalidTransition("Yalnızca bekleyen veya onaylı randevu ertelenebilir. Durum: " + current,
+                    current, "RESCHEDULE");
         }
         validateRange(request.startsAt(), request.endsAt());
         UUID vet = request.veterinarianId();
@@ -173,7 +179,8 @@ public class AppointmentService {
         AppointmentLinkRepository.AppointmentRow row = lock(id);
         AppointmentStatus current = parse(row.status());
         if (!current.canMoveTo(target)) {
-            throw new BusinessRuleException("Randevu %s durumundan %s durumuna geçirilemez.".formatted(current, target));
+            throw invalidTransition("Randevu %s durumundan %s durumuna geçirilemez.".formatted(current, target),
+                    current, target.name());
         }
         links.changeStatus(ctx.organizationId(), id, current.name(), target.name(), ctx.userId(), note);
         if (cancelReason != null) {
@@ -183,6 +190,11 @@ public class AppointmentService {
         events.publishEvent(new AppointmentStatusChangedEvent(ctx.organizationId(), id, current.name(), target.name(),
                 row.clinicId()));
         return get(id);
+    }
+
+    /** Geçersiz durum geçişi bir durum çakışmasıdır (FG-E4): 409 INVALID_STATUS_TRANSITION. */
+    private static ConflictException invalidTransition(String message, AppointmentStatus current, String target) {
+        return new ConflictException(message, "INVALID_STATUS_TRANSITION", Map.of("from", current.name(), "to", target));
     }
 
     private AppointmentLinkRepository.AppointmentRow lock(UUID id) {
