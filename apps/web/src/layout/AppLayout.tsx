@@ -5,6 +5,7 @@ import { Navigate, Outlet, NavLink as RouterNavLink, useLocation } from 'react-r
 import { useAuth } from '../lib/auth';
 import { ROLE_LABEL } from '../lib/session';
 import { useBranch } from '../lib/branch';
+import { NotificationBell } from '../components/NotificationBell';
 import { CLINIC_NAV, PLATFORM_NAV } from './nav';
 
 export function AppLayout({ area }: { area: 'clinic' | 'platform' }) {
@@ -47,6 +48,7 @@ export function AppLayout({ area }: { area: 'clinic' | 'platform' }) {
                 allowDeselect={false}
               />
             )}
+            {area === 'clinic' && <NotificationBell />}
             <Menu position="bottom-end" withinPortal>
               <Menu.Target>
                 <UnstyledButton>

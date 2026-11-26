@@ -36,6 +36,12 @@ spring:
   web:
     locale: tr
     locale-resolver: fixed
+  # Kapanışta çalışan zamanlanmış görev (aşı hatırlatma) yarıda kesilmez.
+  task:
+    scheduling:
+      shutdown:
+        await-termination: true
+        await-termination-period: 30s
   mail:
     host: ${SMTP_HOST:localhost}
     port: ${SMTP_PORT:1025}
@@ -69,6 +75,7 @@ app:
   mail-from: ${MAIL_FROM:VetClinic <no-reply@vetclinic.local>}
   push:
     enabled: ${PUSH_ENABLED:false}
+    access-token: ${EXPO_ACCESS_TOKEN:}
   security:
     cors:
       allowed-origins: ${CORS_ALLOWED_ORIGINS:http://localhost:*,http://127.0.0.1:*}
