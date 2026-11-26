@@ -305,6 +305,9 @@ public class EncounterService {
         if (!repository.animalVisible(animalId)) {
             throw new BusinessRuleException(ANIMAL_NOT_FOUND);
         }
+        if (repository.animalDeceased(animalId)) {
+            throw new ConflictException("Vefat etmiş hasta için muayene başlatılamaz.", "PATIENT_DECEASED", java.util.Map.of());
+        }
         UUID id = UUID.randomUUID();
         String number = "E-%06d".formatted(sequences.next(ctx.organizationId(), "ENCOUNTER"));
         EncounterResponse draft = new EncounterResponse(id, number, animalId, null, null, ctx.clinicId(), appointmentId, vetId,

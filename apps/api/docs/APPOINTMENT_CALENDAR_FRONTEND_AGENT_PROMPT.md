@@ -60,7 +60,7 @@ Veteriner Klinik Yönetim Platformu için **Randevu Takvimi** ekranını mevcut 
 | `GET /appointments` | Query filtreleri yukarıda | `200 PaginatedResponse<AppointmentListItem>`; hatalı query/range/sort `400`; auth `401/403` |
 | `GET /appointments/{id}` | Body yok | `200 AppointmentDetail`; bulunamadı/erişim dışı `404` |
 | `POST /appointments` | `AppointmentCreateRequest`, `X-Clinic-Id` | `201 Appointment`, başlangıç status `BOOKED`; validation `400`, çakışma `409`, DB iş kuralı `422` |
-| `PATCH /appointments/{id}/confirm` | Body yok | `200 Appointment`; `REQUESTED/BOOKED → CONFIRMED`; geçersiz geçiş `422` |
+| `PATCH /appointments/{id}/confirm` | Body yok | `200 Appointment`; `REQUESTED/BOOKED → CONFIRMED`; geçersiz geçiş `409 INVALID_STATUS_TRANSITION` |
 | `PATCH /appointments/{id}/cancel` | `{ "cancellationReason": "..." }` | `200 Appointment`; sebep gerekli, `1..500`; eksik `400` |
 | `PATCH /appointments/{id}/check-in` | Body yok | `200 Appointment`; `BOOKED/CONFIRMED → CHECKED_IN` |
 | `PATCH /appointments/{id}/no-show` | Body yok | `200 Appointment`; `BOOKED/CONFIRMED → NO_SHOW` |

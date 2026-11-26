@@ -27,14 +27,23 @@ Tüm yolların `/api/v1` öneki vardır. Yazma endpoint'lerinde `appointments.ma
 |---|---|---|---|---|---|
 | GET | `/appointments` | Takvim randevu listesi; seçilen aralıkla kesişenleri döndürür | Query: `startDateTime`, `endDateTime`, `vetId`, tekrarlanabilir `status`, `appointmentType`, `bookingChannel`, `animalId`, `ownerId`, `page`, `size`, `sort`; eski alias'lar aşağıda | `PaginatedResponse<AppointmentListItem>` | `200`; `400 BAD_REQUEST` geçersiz tarih/filtre/sort; `401`, `403` |
 | GET | `/appointments/{id}` | DTO tabanlı detay | UUID path; body yok | `AppointmentDetail` | `200`; `401`, `403`, `404 NOT_FOUND` |
-| POST | `/appointments` | Randevu oluşturur; durum `BOOKED` | `AppointmentCreateRequest` | `Appointment` (`201`) | `400 VALIDATION_ERROR` / `MALFORMED_REQUEST`; `401`, `403`, `404`; `409 APPOINTMENT_TIME_CONFLICT`; `422` çalışma saati/iş kuralı |
-| PATCH | `/appointments/{id}/confirm` | `REQUESTED` veya `BOOKED` → `CONFIRMED` | Body yok | `Appointment` | `200`; `404`; `422 BUSINESS_RULE_VIOLATION` geçersiz geçiş |
-| PATCH | `/appointments/{id}/cancel` | İptal; `cancellationReason` zorunlu | `AppointmentCancelRequest` | `Appointment` | `200`; `400 VALIDATION_ERROR` sebep eksik; `404`; `422` geçersiz geçiş |
-| PATCH | `/appointments/{id}/check-in` | `BOOKED` veya `CONFIRMED` → `CHECKED_IN` | Body yok | `Appointment` | `200`; `404`; `422` geçersiz geçiş |
-| PATCH | `/appointments/{id}/no-show` | `BOOKED` veya `CONFIRMED` → `NO_SHOW` | Body yok | `Appointment` | `200`; `404`; `422` geçersiz geçiş |
-| PATCH | `/appointments/{id}/reschedule` | İzin verilen bekleyen/onaylı durumdaki randevuyu taşır; yeni slot ve hekim DB tarafından da doğrulanır | `AppointmentRescheduleRequest` | `Appointment` | `200`; `400` hatalı body; `404`; `409 APPOINTMENT_TIME_CONFLICT`; `422` geçersiz durum/çalışma saati |
+| POST | `/appointments` | Randevu oluşturur; durum `BOOKED` | `AppointmentCreateRequest` | `Appointment` (`201`) | `400 VALIDATION_ERROR` / `MALFORMED_REQUEST`; `401`, `403`, `404`; `409 APPOINTMENT_TIME_CONFLICT`; `409 PATIENT_DECEASED` vefat etmiş hasta; `422` çalışma saati/iş kuralı |
+| PATCH | `/appointments/{id}/confirm` | `REQUESTED` veya `BOOKED` → `CONFIRMED` | Body yok | `Appointment` | `200`; `404`; `409 INVALID_STATUS_TRANSITION` geçersiz geçiş |
+| PATCH | `/appointments/{id}/cancel` | İptal; `cancellationReason` zorunlu | `AppointmentCancelRequest` | `Appointment` | `200`; `400 VALIDATION_ERROR` sebep eksik; `404`; `409 INVALID_STATUS_TRANSITION` geçersiz geçiş |
+| PATCH | `/appointments/{id}/check-in` | `BOOKED` veya `CONFIRMED` → `CHECKED_IN` | Body yok | `Appointment` | `200`; `404`; `409 INVALID_STATUS_TRANSITION` geçersiz geçiş |
+| PATCH | `/appointments/{id}/no-show` | `BOOKED` veya `CONFIRMED` → `NO_SHOW` | Body yok | `Appointment` | `200`; `404`; `409 INVALID_STATUS_TRANSITION` geçersiz geçiş |
+| PATCH | `/appointments/{id}/reschedule` | İzin verilen bekleyen/onaylı durumdaki randevuyu taşır; yeni slot ve hekim DB tarafından da doğrulanır | `AppointmentRescheduleRequest` | `Appointment` | `200`; `400` hatalı body; `404`; `409 APPOINTMENT_TIME_CONFLICT`; `409 INVALID_STATUS_TRANSITION` geçersiz durum; `422` çalışma saati |
 | PATCH | `/appointments/{id}/start` | Bağlı klinik muayenesini başlatır; sadece durum güncellemesi yapmaz | İsteğe bağlı `StartFromAppointmentRequest`: `{ "chiefComplaint": string, "history": string }` | Mevcut `EncounterResponse` | `200`; `401`, `403` (`appointments.manage` + `clinical.write`); `404`; `409` açık muayene/durum çakışması |
 | PATCH | `/appointments/{id}/complete` | Tek açık bağlı muayeneyi kurallara göre kapatır; kapatma randevuyu `COMPLETED` yapar | İsteğe bağlı `CloseEncounterRequest`: `{ "vetNotes": string }` | `Appointment` | `200`; `401`, `403` (`appointments.manage` + `clinical.write`); `404`; `409` açık muayene yok/çok veya appointment `IN_PROGRESS` değil; `422` muayene zorunlu alanları eksik |
+
+### Uygun saatler ve form seçenekleri (FG-E2)
+
+| Method | URL | Açıklama | Query | Yanıt | Hatalar |
+|---|---|---|---|---|---|
+| GET | `/appointments/availability` | Şube + hizmet + hekim + gün için boş başlangıç saatleri | `serviceId` (ertelemede yerine `excludeAppointmentId` verilebilir: süre randevunun kendi süresi), `veterinarianId` (veya `vetId`), `date` (`yyyy-MM-dd`, klinik yerel günü), isteğe bağlı `clinicId` (yoksa `X-Clinic-Id`), `excludeAppointmentId` (ertelemede randevunun kendi saati boş sayılır) | `{ date, clinicId, veterinarianId, serviceId, durationMinutes, slots: [{ startsAt, endsAt, time }] }` | `400` eksik/geçersiz parametre; `403`; `404` hizmet/hekim/şube yok veya erişim dışı; `422` hizmetin süresi tanımsız |
+| GET | `/appointments/booking-options` | Randevu formu seçenekleri | isteğe bağlı `clinicId` | `{ services: [{ id, code, name, durationMinutes, price }], veterinarians: [{ id, fullName }] }` | `403`; `404` şube erişim dışı |
+
+Kurallar: başlangıçlar hekimin o şubedeki çalışma penceresinin başından itibaren 15 dakikada bir dizilir, hizmet süresi (`service_catalog.duration_minutes`) pencereye sığmalıdır. İptal ve gelmedi dışındaki randevularla kesişen (organizasyonun tüm şubelerinde, `vet.veterinarian_busy_intervals`), geçmişte kalan ve mesai dışı başlangıçlar listelenmez. Çalışma saati tanımlı olmayan gün boş liste döner. Saatler Europe/Istanbul offset'iyle (`2035-03-06T09:00:00+03:00`) döner. Liste yalnızca yol gösterir: aynı saati eşzamanlı alan iki istekten biri `409 APPOINTMENT_TIME_CONFLICT` alır.
 
 ### Geriye uyumluluk
 
@@ -373,14 +382,16 @@ Ortak şekil `ApiError`'dır:
 | 409 | `APPOINTMENT_TIME_CONFLICT` | SQLState `23P01`; aynı hekim/hayvan slotu çakışıyor |
 | 409 | `DB_CONFLICT` / `CONFLICT` | Diğer veritabanı veya eşzamanlı işlem çakışmaları |
 | 422 | `VETERINARIAN_OUTSIDE_WORKING_HOURS` | "Seçilen saat hekimin çalışma saatleri dışında." |
-| 422 | `BUSINESS_RULE_VIOLATION` | Durum geçişi, sahip uyuşmazlığı veya başka uygulama iş kuralı |
+| 409 | `INVALID_STATUS_TRANSITION` | Geçersiz durum geçişi (FG-E4); `details.from`, `details.to` |
+| 409 | `PATIENT_DECEASED` | Vefat etmiş hasta için randevu / muayene açılamaz |
+| 422 | `BUSINESS_RULE_VIOLATION` | Sahip uyuşmazlığı veya başka uygulama iş kuralı |
 | 422 | `DB_RULE_VIOLATION` | DB CHECK/trigger iş kuralı ihlali |
 
 State transition kuralı dışındaki hatalar için istemci yalnızca `status`'a değil, `code`'a göre davranmalı; kullanıcı mesajı `message` alanından gösterilmelidir. Hata ayrıntısında SQL metni veya hassas DB bilgisi beklenmemelidir.
 
 ## 6. Durum geçişleri ve doğrulama
 
-İzin verilen randevu geçişleri:
+İzin verilen randevu geçişleri (dışındaki her geçiş `409 INVALID_STATUS_TRANSITION`):
 
 | Mevcut durum | İzin verilen işlem/hedef |
 |---|---|

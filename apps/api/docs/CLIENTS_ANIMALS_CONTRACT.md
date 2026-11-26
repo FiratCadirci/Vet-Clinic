@@ -229,6 +229,18 @@ Gelecek tarih veya doğumdan önce → 400; zaten vefat → 409.
 **Kimlik** `POST`: `{ "identifierType": "MICROCHIP", "identifierValue": "900123456789012", "issuedAt": null, "expiresAt": null, "issuingAuthority": null }`
 `identifierType`: `MICROCHIP|PASSPORT|TATTOO|REGISTRY|OTHER`. **Mikroçip 9–15 haneli rakam** olmalı (422). Aynı numara başka hastada varsa 409 "Bu kimlik numarası başka bir hastaya kayıtlı." Yanıt: `{ id, identifierType, identifierValue, issuedAt, expiresAt, issuingAuthority, verified }`.
 
+## 4.1 Hasta listesi ve hasta geçmişi (personel ekranları, `patient` modülü)
+
+| Endpoint | Yetki | Açıklama |
+|---|---|---|
+| `GET /patients?q=&ownerId=&page=&size=` | `clients.read` | Hasta listesi satırları (`ownerId`: sahibin güncel hayvanları) (en fazla 200/sayfa): hayvan + güncel birincil sahip (`ownerId`, `ownerName`, `ownerPhone`) + `microchipNo` + `registeredClinicId` + `speciesCode`. `q`: hasta adı, hasta no, sahip adı, sahip telefonu (0/90 öneki yok sayılır) veya çip/kimlik no |
+| `GET /patients/{id}` | `clients.read` | Aynı satır, tek hasta (kart başlığı) |
+| `GET /patients/{id}/history?page=&size=` | `clients.read` veya `clinical.read` | Muayene, aşı ve randevular tek kronolojik listede (yeniden eskiye) |
+
+Geçmiş yanıtı `PageResponse` alanlarına ek olarak `hiddenCount`, `hiddenByType: { encounters, vaccinations, appointments }` ve `clinicalAccess` taşır. Satır: `{ type: ENCOUNTER|VACCINATION|APPOINTMENT, id, occurredAt, endedAt, clinicId, clinicName, status, title, veterinarianName, chiefComplaint, assessment, treatmentPlan, doseNumber, batchNumber, nextDueAt, appointmentType, encounterId }`.
+
+Görünürlük (FG-C5, FG-J1): aynı klinik grubundaki şubeler kayıtları paylaşır; başka klinik grubunun kayıtları RLS ile görünmez. `clinical.read` yetkisi olmayan rol (ör. resepsiyon) muayene ve aşı satırlarını görmez (`clinicalAccess: false`). Görünmeyen kayıtlar listede yer almaz; yalnızca türe göre sayısı döner (`vet.count_animal_history_records`, SECURITY DEFINER, içerik döndürmez). Başka organizasyonun / erişim dışı hastanın geçmişi `404`.
+
 ## 5. Diğer bağlantılı uçlar
 - `GET /search?q=` – global arama (min 2 karakter, müşteri + hayvan, ad/telefon/çip, en çok 10 sonuç).
 - `GET /vaccinations/due?status=&days=` – vadesi gelen aşılar (hasta kartı aşı sekmesi için).

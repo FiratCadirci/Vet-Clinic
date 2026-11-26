@@ -115,6 +115,10 @@ public class AppointmentJdbcRepository {
         return !jdbc.queryForList("select 1 from vet.animals where id = ?", animalId).isEmpty();
     }
 
+    public boolean animalDeceased(UUID animalId) {
+        return !jdbc.queryForList("select 1 from vet.animals where id = ? and deceased_at is not null", animalId).isEmpty();
+    }
+
     public boolean veterinarianActive(UUID veterinarianId) {
         return !jdbc.queryForList("select 1 from vet.veterinarians where id = ? and is_active", veterinarianId).isEmpty();
     }
