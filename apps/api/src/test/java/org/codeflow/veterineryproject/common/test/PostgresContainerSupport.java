@@ -82,7 +82,7 @@ public abstract class PostgresContainerSupport {
                 }
             }));
         } else {
-            container = new PostgreSQLContainer<>("postgres:15-alpine")
+            container = new PostgreSQLContainer<>("postgres:17-alpine")
                     .withDatabaseName("Veterinery")
                     .withUsername("postgres")
                     .withPassword("postgres");
