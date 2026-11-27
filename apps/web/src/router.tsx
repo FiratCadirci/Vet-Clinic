@@ -6,10 +6,12 @@ import { LoginPage } from './pages/LoginPage';
 import { Placeholder } from './pages/Placeholder';
 
 /** Sayfalar ihtiyaç anında yüklenir (ilk açılış daha hızlı). */
+const AppointmentsPage = lazy(() => import('./pages/appointments/AppointmentsPage').then((m) => ({ default: m.AppointmentsPage })));
 const AcceptInvitePage = lazy(() => import('./pages/auth/AcceptInvitePage').then((m) => ({ default: m.AcceptInvitePage })));
 const SignupPage = lazy(() => import('./pages/auth/SignupPage').then((m) => ({ default: m.SignupPage })));
 const InventoryPage = lazy(() => import('./pages/inventory/InventoryPage').then((m) => ({ default: m.InventoryPage })));
 const OwnerDetailPage = lazy(() => import('./pages/patients/OwnerDetailPage').then((m) => ({ default: m.OwnerDetailPage })));
+const PatientDetailPage = lazy(() => import('./pages/patients/PatientDetailPage').then((m) => ({ default: m.PatientDetailPage })));
 const PatientsPage = lazy(() => import('./pages/patients/PatientsPage').then((m) => ({ default: m.PatientsPage })));
 const SettingsPage = lazy(() => import('./pages/settings/SettingsPage').then((m) => ({ default: m.SettingsPage })));
 const StaffPage = lazy(() => import('./pages/staff/StaffPage').then((m) => ({ default: m.StaffPage })));
@@ -35,9 +37,9 @@ export const router = createBrowserRouter([
     element: <AppLayout area="clinic" />,
     children: [
       { path: '/', element: <Placeholder title="Genel bakış" /> },
-      { path: '/appointments', element: <Placeholder title="Randevular" /> },
+      { path: '/appointments', element: page(<AppointmentsPage />) },
       { path: '/patients', element: page(<PatientsPage />) },
-      { path: '/patients/:id', element: <Placeholder title="Hasta" /> },
+      { path: '/patients/:id', element: page(<PatientDetailPage />) },
       { path: '/owners/:id', element: page(<OwnerDetailPage />) },
       { path: '/examinations', element: <Placeholder title="Muayeneler" /> },
       { path: '/examinations/:id', element: <Placeholder title="Muayene" /> },
