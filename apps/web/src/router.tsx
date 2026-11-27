@@ -6,6 +6,7 @@ import { LoginPage } from './pages/LoginPage';
 import { Placeholder } from './pages/Placeholder';
 
 /** Sayfalar ihtiyaç anında yüklenir (ilk açılış daha hızlı). */
+const AppointmentsPage = lazy(() => import('./pages/appointments/AppointmentsPage').then((m) => ({ default: m.AppointmentsPage })));
 const AcceptInvitePage = lazy(() => import('./pages/auth/AcceptInvitePage').then((m) => ({ default: m.AcceptInvitePage })));
 const SignupPage = lazy(() => import('./pages/auth/SignupPage').then((m) => ({ default: m.SignupPage })));
 const InventoryPage = lazy(() => import('./pages/inventory/InventoryPage').then((m) => ({ default: m.InventoryPage })));
@@ -35,7 +36,7 @@ export const router = createBrowserRouter([
     element: <AppLayout area="clinic" />,
     children: [
       { path: '/', element: <Placeholder title="Genel bakış" /> },
-      { path: '/appointments', element: <Placeholder title="Randevular" /> },
+      { path: '/appointments', element: page(<AppointmentsPage />) },
       { path: '/patients', element: page(<PatientsPage />) },
       { path: '/patients/:id', element: <Placeholder title="Hasta" /> },
       { path: '/owners/:id', element: page(<OwnerDetailPage />) },
