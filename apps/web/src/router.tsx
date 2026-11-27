@@ -6,9 +6,13 @@ import { LoginPage } from './pages/LoginPage';
 import { Placeholder } from './pages/Placeholder';
 
 /** Sayfalar ihtiyaç anında yüklenir (ilk açılış daha hızlı). */
+const AcceptInvitePage = lazy(() => import('./pages/auth/AcceptInvitePage').then((m) => ({ default: m.AcceptInvitePage })));
+const SignupPage = lazy(() => import('./pages/auth/SignupPage').then((m) => ({ default: m.SignupPage })));
 const InventoryPage = lazy(() => import('./pages/inventory/InventoryPage').then((m) => ({ default: m.InventoryPage })));
 const OwnerDetailPage = lazy(() => import('./pages/patients/OwnerDetailPage').then((m) => ({ default: m.OwnerDetailPage })));
 const PatientsPage = lazy(() => import('./pages/patients/PatientsPage').then((m) => ({ default: m.PatientsPage })));
+const SettingsPage = lazy(() => import('./pages/settings/SettingsPage').then((m) => ({ default: m.SettingsPage })));
+const StaffPage = lazy(() => import('./pages/staff/StaffPage').then((m) => ({ default: m.StaffPage })));
 
 const page = (node: ReactNode) => (
   <Suspense
@@ -24,9 +28,9 @@ const page = (node: ReactNode) => (
 
 export const router = createBrowserRouter([
   { path: '/login', element: <LoginPage /> },
-  { path: '/signup', element: <Placeholder title="Klinik hesabı oluştur" /> },
-  { path: '/accept-invite', element: <Placeholder title="Davet" /> },
-  { path: '/davet', element: <Placeholder title="Davet" /> },
+  { path: '/signup', element: page(<SignupPage />) },
+  { path: '/accept-invite', element: page(<AcceptInvitePage />) },
+  { path: '/davet', element: page(<AcceptInvitePage />) },
   {
     element: <AppLayout area="clinic" />,
     children: [
@@ -42,8 +46,8 @@ export const router = createBrowserRouter([
       { path: '/sales', element: <Placeholder title="Satış ve fatura" /> },
       { path: '/sales/:id', element: <Placeholder title="Satış" /> },
       { path: '/reports', element: <Placeholder title="Raporlar" /> },
-      { path: '/staff', element: <Placeholder title="Personel ve yetkiler" /> },
-      { path: '/settings', element: <Placeholder title="Klinik ayarları" /> },
+      { path: '/staff', element: page(<StaffPage />) },
+      { path: '/settings', element: page(<SettingsPage />) },
       { path: '/subscription', element: <Placeholder title="Abonelik" /> },
       { path: '/audit', element: <Placeholder title="Denetim izi" /> },
     ],
