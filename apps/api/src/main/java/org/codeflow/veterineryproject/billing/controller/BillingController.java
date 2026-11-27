@@ -9,14 +9,21 @@ import org.codeflow.veterineryproject.billing.dto.BillingDto.InvoiceResponse;
 import org.codeflow.veterineryproject.billing.dto.BillingDto.InvoiceSummary;
 import org.codeflow.veterineryproject.billing.dto.BillingDto.LineRequest;
 import org.codeflow.veterineryproject.billing.dto.BillingDto.PaymentRequest;
+import org.codeflow.veterineryproject.billing.dto.BillingDto.ReplaceLinesRequest;
 import org.codeflow.veterineryproject.billing.service.BillingService;
+import org.codeflow.veterineryproject.billing.service.BillingService.InvoicePdf;
 import org.codeflow.veterineryproject.common.pagination.PageResponse;
 import org.springframework.format.annotation.DateTimeFormat;
+import org.springframework.http.ContentDisposition;
+import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
+import org.springframework.http.MediaType;
+import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -24,7 +31,9 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestController;
 
+import java.nio.charset.StandardCharsets;
 import java.time.LocalDate;
+import java.util.List;
 import java.util.UUID;
 
 /** Fatura, tahsilat, müşteri bakiyesi ve günlük kasa özeti. Yazma uçlarında X-Clinic-Id zorunludur. */
@@ -42,7 +51,7 @@ public class BillingController {
     @GetMapping("/invoices")
     public PageResponse<InvoiceSummary> list(@RequestParam(required = false) UUID clinicId,
                                              @RequestParam(required = false) UUID clientId,
-                                             @RequestParam(required = false) String status,
+                                             @RequestParam(required = false) List<String> status,
                                              @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate from,
                                              @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate to,
                                              @RequestParam(defaultValue = "0") int page,
@@ -53,6 +62,17 @@ public class BillingController {
     @GetMapping("/invoices/{id}")
     public InvoiceResponse get(@PathVariable UUID id) {
         return service.get(id);
+    }
+
+    /** FG-G5: fatura / fiş taslağı (application/pdf, Türkçe karakterli). */
+    @GetMapping("/invoices/{id}/pdf")
+    public ResponseEntity<byte[]> pdf(@PathVariable UUID id) {
+        InvoicePdf pdf = service.pdf(id);
+        return ResponseEntity.ok()
+                .contentType(MediaType.APPLICATION_PDF)
+                .header(HttpHeaders.CONTENT_DISPOSITION, ContentDisposition.inline()
+                        .filename(pdf.fileName(), StandardCharsets.UTF_8).build().toString())
+                .body(pdf.content());
     }
 
     @PostMapping("/invoices")
@@ -67,6 +87,13 @@ public class BillingController {
     public InvoiceResponse addLine(@RequestHeader("X-Clinic-Id") String clinicId, @PathVariable UUID id,
                                    @Valid @RequestBody LineRequest request) {
         return service.addLine(id, request);
+    }
+
+    /** Taslağın tüm kalemlerini değiştirir (taslak düzenleyicisi). */
+    @PutMapping("/invoices/{id}/lines")
+    public InvoiceResponse replaceLines(@RequestHeader("X-Clinic-Id") String clinicId, @PathVariable UUID id,
+                                        @Valid @RequestBody ReplaceLinesRequest request) {
+        return service.replaceLines(id, request.lines());
     }
 
     @PostMapping("/invoices/{id}/issue")

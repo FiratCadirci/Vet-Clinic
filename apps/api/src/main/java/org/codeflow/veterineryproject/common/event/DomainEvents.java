@@ -33,4 +33,8 @@ public final class DomainEvents {
     /** Randevunun zamanı değişti (erteleme); bildirim modülü hayvan sahibine yeni saati bildirir. */
     public record AppointmentRescheduledEvent(UUID organizationId, UUID appointmentId, UUID clinicId) {
     }
+
+    /** Satış faturası kesildi (DRAFT → ISSUED); bildirim modülü faturanın müşterisine haber verir. */
+    public record InvoiceIssuedEvent(UUID organizationId, UUID invoiceId, UUID clientId, UUID clinicId) {
+    }
 }

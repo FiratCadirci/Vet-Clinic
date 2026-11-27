@@ -99,14 +99,25 @@ Randevu yoksa veya başka kiracıya aitse `404`.
 
 | Metot | Yol | Açıklama |
 |---|---|---|
-| GET | `/invoices`, `/invoices/{id}` | Liste / detay |
-| POST | `/invoices` | Taslak fatura (201) |
+| GET | `/invoices`, `/invoices/{id}` | Liste (`status` birden çok verilebilir) / detay |
+| POST | `/invoices` | Taslak fatura (201). Kalem: `lineType` SERVICE/PRODUCT/OTHER, fiyat KDV hariç, `discountAmount` (TL) veya `discountRate` (%), `taxRate` |
 | POST | `/invoices/{id}/lines` | Kalem ekle (yalnız DRAFT) |
-| POST | `/invoices/{id}/issue` | Kes (DRAFT → ISSUED; stok/komisyon DB'de) |
-| POST | `/invoices/{id}/void` | İptal |
+| PUT | `/invoices/{id}/lines` | Taslağın kalemlerini topluca değiştir (yalnız DRAFT, aksi 422) |
+| POST | `/invoices/{id}/issue` | Kes: FEFO lot dağıtımı + numara (`F-000001`, organizasyon bazında boşluksuz) + stok/komisyon (DB tetikleyicisi) tek transaction; yetersiz stok 409 `INSUFFICIENT_STOCK`, hiçbir şey değişmez |
+| POST | `/invoices/{id}/void` | İptal (yalnız DRAFT) |
 | POST | `/invoices/{id}/payments` | Ödeme al (201; fazla ödeme → 422) |
+| GET | `/invoices/{id}/pdf` | Fatura / fiş taslağı, `application/pdf` (Türkçe karakterli) |
 | GET | `/clients/{id}/balance` | Müşteri bakiyesi |
 | GET | `/cashier/daily?date=&clinicId=` | Günlük kasa özeti |
+
+Taslak faturanın `invoiceNo` alanı geçici yer tutucudur (`F-TASLAK-…`); gerçek numara kesimde verilir.
+Satır tutarları: brüt = round(miktar × birim, 2), net = brüt − indirim, KDV = round(net × oran / 100, 2), toplam = net + KDV.
+
+## Komisyon – `/api/v1/commissions` (`commissions.read`)
+
+| Metot | Yol | Açıklama |
+|---|---|---|
+| GET | `/?clinicId=&invoiceId=&from=&to=&page=&size=` | Kliniğin komisyon kayıtları (mama/ilaç satırları, KDV hariç matrah). Deneme aboneliğinde kesilen faturada kayıt oluşmaz (`commissionPolicy = NO_COMMISSION`) |
 
 ## Muayene – `/api/v1`
 

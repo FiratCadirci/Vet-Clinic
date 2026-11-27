@@ -19,6 +19,7 @@ public enum NotificationType {
     APPOINTMENT_RESCHEDULED("Randevu değişikliği", Audience.OWNER, true, IN_APP, EMAIL, PUSH),
     VACCINE_RECORDED("Aşı kaydı", Audience.OWNER, true, IN_APP, EMAIL, PUSH),
     VACCINE_DUE("Aşı hatırlatması", Audience.OWNER, true, IN_APP, EMAIL, PUSH),
+    INVOICE_ISSUED("Fatura", Audience.OWNER, true, IN_APP, EMAIL, PUSH),
     STOCK_LOW("Kritik stok uyarısı", Audience.STAFF, true, IN_APP),
     /** Davet edilenin henüz hesabı yoktur; yalnız e-posta, tercih edilemez. */
     STAFF_INVITED("Personel daveti", Audience.STAFF, false, EMAIL);

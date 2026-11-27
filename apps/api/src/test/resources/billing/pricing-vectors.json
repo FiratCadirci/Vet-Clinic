@@ -1,0 +1,31 @@
+{
+  "description": "FG-G1 satır fiyatlama test vektörleri. Tek kaynak: Java LinePricingTest, BillingSalesIT (DB üretilmiş sütunlar) ve web components/admin/pricing.test.ts aynı dosyayı okur. Tutarlar TL, KDV yüzde.",
+  "lines": [
+    { "name": "temel", "quantity": "1", "unitPrice": "100.00", "discountAmount": "0.00", "taxRate": "20",
+      "expected": { "gross": "100.00", "discount": "0.00", "net": "100.00", "tax": "20.00", "total": "120.00" } },
+    { "name": "indirimli çoklu", "quantity": "3", "unitPrice": "125.50", "discountAmount": "6.50", "taxRate": "20",
+      "expected": { "gross": "376.50", "discount": "6.50", "net": "370.00", "tax": "74.00", "total": "444.00" } },
+    { "name": "yüzde 1 KDV aşağı yuvarlanır", "quantity": "7", "unitPrice": "3.33", "discountAmount": "0.01", "taxRate": "1",
+      "expected": { "gross": "23.31", "discount": "0.01", "net": "23.30", "tax": "0.23", "total": "23.53" } },
+    { "name": "yarım kuruş yukarı", "quantity": "1", "unitPrice": "0.01", "discountAmount": "0.00", "taxRate": "50",
+      "expected": { "gross": "0.01", "discount": "0.00", "net": "0.01", "tax": "0.01", "total": "0.02" } },
+    { "name": "yarımın altı aşağı", "quantity": "1", "unitPrice": "0.01", "discountAmount": "0.00", "taxRate": "49.99",
+      "expected": { "gross": "0.01", "discount": "0.00", "net": "0.01", "tax": "0.00", "total": "0.01" } },
+    { "name": "yüzde 10 KDV yukarı", "quantity": "1", "unitPrice": "199.99", "discountAmount": "0.00", "taxRate": "10",
+      "expected": { "gross": "199.99", "discount": "0.00", "net": "199.99", "tax": "20.00", "total": "219.99" } },
+    { "name": "mama kampanyası yüzde 8", "quantity": "12", "unitPrice": "89.90", "discountAmount": "107.88", "taxRate": "8",
+      "expected": { "gross": "1078.80", "discount": "107.88", "net": "970.92", "tax": "77.67", "total": "1048.59" } },
+    { "name": "ücretsiz satır", "quantity": "1", "unitPrice": "100.00", "discountAmount": "100.00", "taxRate": "20",
+      "expected": { "gross": "100.00", "discount": "100.00", "net": "0.00", "tax": "0.00", "total": "0.00" } },
+    { "name": "KDV sıfır", "quantity": "1", "unitPrice": "100.00", "discountAmount": "0.00", "taxRate": "0",
+      "expected": { "gross": "100.00", "discount": "0.00", "net": "100.00", "tax": "0.00", "total": "100.00" } }
+  ],
+  "sale": {
+    "lines": [
+      { "quantity": "2", "unitPrice": "45.00", "discountAmount": "5.00", "taxRate": "20" },
+      { "quantity": "1", "unitPrice": "199.99", "discountAmount": "0.00", "taxRate": "10" }
+    ],
+    "expected": { "gross": "289.99", "discount": "5.00", "tax": "37.00", "total": "321.99" }
+  },
+  "invalid": { "quantity": "1", "unitPrice": "10.00", "discountAmount": "10.01", "taxRate": "20" }
+}
