@@ -4,6 +4,7 @@ import org.codeflow.veterineryproject.notification.model.NotificationRecipient;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Repository;
 
+import java.math.BigDecimal;
 import java.time.OffsetDateTime;
 import java.util.List;
 import java.util.Optional;
@@ -48,6 +49,19 @@ public class NotificationRecipientRepository {
                 rs.getObject("animal_id", UUID.class), rs.getObject("client_id", UUID.class),
                 rs.getObject("starts_at", OffsetDateTime.class), rs.getString("clinic_name")), appointmentId)
                 .stream().findFirst();
+    }
+
+    /** Kesilmiş faturanın müşterisi ve özeti (V28 SECURITY DEFINER, organizasyon kapsamlı). */
+    public record InvoiceNotice(OwnerContact owner, UUID animalId, String invoiceNo, BigDecimal grandTotal,
+                                String currency, String clinicName) {
+    }
+
+    public Optional<InvoiceNotice> findIssuedInvoice(UUID invoiceId) {
+        return jdbc.query("select * from vet.notification_invoice(?)", (rs, i) -> new InvoiceNotice(
+                new OwnerContact(rs.getObject("client_id", UUID.class), rs.getString("client_name"),
+                        rs.getObject("owner_user_id", UUID.class), rs.getString("owner_email"), null),
+                rs.getObject("animal_id", UUID.class), rs.getString("invoice_no"), rs.getBigDecimal("grand_total"),
+                rs.getString("currency"), rs.getString("clinic_name")), invoiceId).stream().findFirst();
     }
 
     /** Aşıyı kaydeden personelin bağlamında okunur (RLS); görünmüyorsa boş. */

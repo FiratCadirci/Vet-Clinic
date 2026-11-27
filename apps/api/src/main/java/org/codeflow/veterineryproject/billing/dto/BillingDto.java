@@ -20,6 +20,11 @@ public final class BillingDto {
     private BillingDto() {
     }
 
+    /**
+     * Satış kalemi: hizmet (SERVICE + serviceId), ürün (PRODUCT + productId: ilaç, mama, aşı...) veya serbest kalem
+     * (OTHER). Fiyatlar KDV hariç. İndirim tutar ({@code discountAmount}, TL) ya da oran ({@code discountRate}) olarak
+     * verilir; ikisi birden verilirse tutar esastır. Lot takipli üründe lotId verilmezse kesimde FEFO ile seçilir.
+     */
     public record LineRequest(
             @NotNull @Pattern(regexp = "SERVICE|PRODUCT|OTHER") String lineType,
             UUID serviceId,
@@ -29,7 +34,8 @@ public final class BillingDto {
             @NotNull @DecimalMin(value = "0.001") BigDecimal quantity,
             @NotNull @DecimalMin("0.00") BigDecimal unitPrice,
             @DecimalMin("0") @DecimalMax("100") BigDecimal discountRate,
-            @DecimalMin("0") @DecimalMax("100") BigDecimal taxRate) {
+            @DecimalMin("0") @DecimalMax("100") BigDecimal taxRate,
+            @DecimalMin("0.00") BigDecimal discountAmount) {
     }
 
     public record CreateInvoiceRequest(
@@ -42,18 +48,30 @@ public final class BillingDto {
             @NotEmpty @Valid List<LineRequest> lines) {
     }
 
+    /** Taslağın tüm kalemlerini topluca değiştirir (taslak düzenleyicisi). */
+    public record ReplaceLinesRequest(@NotEmpty @Size(max = 200) @Valid List<LineRequest> lines) {
+    }
+
     public record LineResponse(UUID id, int lineNo, String lineType, UUID serviceId, UUID productId, UUID lotId,
                                String description, BigDecimal quantity, BigDecimal unitPrice, BigDecimal discountRate,
-                               BigDecimal taxRate, BigDecimal netAmount, BigDecimal taxAmount, BigDecimal lineTotal) {
+                               BigDecimal taxRate, BigDecimal netAmount, BigDecimal taxAmount, BigDecimal lineTotal,
+                               BigDecimal grossAmount, BigDecimal discountAmount, String lotNumber,
+                               String productType) {
     }
 
     public record InvoiceSummary(UUID id, String invoiceNo, String status, UUID clinicId, UUID clientId,
                                  String clientName, UUID animalId, OffsetDateTime issuedAt, LocalDate dueAt,
-                                 BigDecimal grandTotal, BigDecimal paidTotal, BigDecimal balance, String currency) {
+                                 BigDecimal grandTotal, BigDecimal paidTotal, BigDecimal balance, String currency,
+                                 OffsetDateTime createdAt, String animalName) {
     }
 
+    /**
+     * subtotal = KDV hariç net toplam (indirim düşülmüş), grossTotal = indirim öncesi brüt, discountTotal = indirim;
+     * grossTotal − discountTotal + taxTotal = grandTotal. commissionPolicy kesimde uygulanan komisyon stratejisidir.
+     */
     public record InvoiceResponse(InvoiceSummary invoice, BigDecimal subtotal, BigDecimal taxTotal, String notes,
-                                  UUID encounterId, List<LineResponse> lines, List<PaymentResponse> payments) {
+                                  UUID encounterId, List<LineResponse> lines, List<PaymentResponse> payments,
+                                  BigDecimal grossTotal, BigDecimal discountTotal, String commissionPolicy) {
     }
 
     public record PaymentRequest(
