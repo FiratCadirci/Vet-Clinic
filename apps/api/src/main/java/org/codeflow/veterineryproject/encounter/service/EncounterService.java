@@ -14,6 +14,7 @@ import org.codeflow.veterineryproject.encounter.dto.AddendumResponse;
 import org.codeflow.veterineryproject.encounter.dto.CloseEncounterRequest;
 import org.codeflow.veterineryproject.encounter.dto.CreateEncounterRequest;
 import org.codeflow.veterineryproject.encounter.dto.DiagnosisRequest;
+import org.codeflow.veterineryproject.encounter.dto.EncounterFlowResponse;
 import org.codeflow.veterineryproject.encounter.dto.EncounterResponse;
 import org.codeflow.veterineryproject.encounter.dto.EncounterStatus;
 import org.codeflow.veterineryproject.encounter.dto.ExaminationRequest;
@@ -29,6 +30,8 @@ import org.codeflow.veterineryproject.encounter.repository.EncounterJdbcReposito
 import org.codeflow.veterineryproject.encounter.workflow.AdmissionStep;
 import org.codeflow.veterineryproject.encounter.workflow.CloseStep;
 import org.codeflow.veterineryproject.encounter.workflow.DiagnosisStep;
+import org.codeflow.veterineryproject.encounter.workflow.EncounterFlow;
+import org.codeflow.veterineryproject.encounter.workflow.EncounterFlows;
 import org.codeflow.veterineryproject.encounter.workflow.ExaminationStep;
 import org.codeflow.veterineryproject.encounter.workflow.PlanStep;
 import org.codeflow.veterineryproject.user.service.VeterinarianService;
@@ -40,10 +43,12 @@ import org.springframework.security.access.AccessDeniedException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.math.BigDecimal;
 import java.time.OffsetDateTime;
 import java.util.List;
 import java.util.Set;
 import java.util.UUID;
+import java.util.function.BiFunction;
 
 @Service
 public class EncounterService {
@@ -63,11 +68,12 @@ public class EncounterService {
     private final DiagnosisStep diagnosisStep;
     private final PlanStep planStep;
     private final CloseStep closeStep;
+    private final EncounterFlows flows;
 
     public EncounterService(EncounterJdbcRepository repository, AppointmentLinkRepository appointments,
                             SequenceCounterRepository sequences, VeterinarianService veterinarians, AuditRecorder audit,
                             ApplicationEventPublisher events, AdmissionStep admissionStep, ExaminationStep examinationStep,
-                            DiagnosisStep diagnosisStep, PlanStep planStep, CloseStep closeStep) {
+                            DiagnosisStep diagnosisStep, PlanStep planStep, CloseStep closeStep, EncounterFlows flows) {
         this.repository = repository;
         this.appointments = appointments;
         this.sequences = sequences;
@@ -79,12 +85,19 @@ public class EncounterService {
         this.diagnosisStep = diagnosisStep;
         this.planStep = planStep;
         this.closeStep = closeStep;
+        this.flows = flows;
+    }
+
+    /** Muayene türlerinin akış tanımları (adımlar, girilebilen ve zorunlu alanlar). */
+    public List<EncounterFlowResponse> flowDefinitions() {
+        return flows.describeAll();
     }
 
     /** Randevusuz (yürüyerek gelen) muayene. */
     @Transactional
     public EncounterResponse startWalkIn(CreateEncounterRequest request) {
-        return start(request.animalId(), null, request.encounterType(), request.chiefComplaint(), request.history());
+        return start(request.animalId(), null, request.encounterType(), request.chiefComplaint(), request.history(),
+                request.weightKg(), request.temperatureC());
     }
 
     /** Aynı klinik grubundaki onaylı randevudan muayene başlatır; randevu IN_PROGRESS olur. */
@@ -101,8 +114,9 @@ public class EncounterService {
         }
         String complaint = request != null && request.chiefComplaint() != null && !request.chiefComplaint().isBlank()
                 ? request.chiefComplaint() : appointment.reason();
-        EncounterResponse created = start(appointment.animalId(), appointmentId, "CONSULTATION", complaint,
-                request == null ? null : request.history());
+        EncounterResponse created = start(appointment.animalId(), appointmentId,
+                request == null ? null : request.encounterType(), complaint, request == null ? null : request.history(),
+                request == null ? null : request.weightKg(), request == null ? null : request.temperatureC());
         appointments.changeStatus(ctx.organizationId(), appointmentId, appointment.status(), "IN_PROGRESS", ctx.userId(),
                 "Muayene başlatıldı");
         events.publishEvent(new AppointmentStatusChangedEvent(ctx.organizationId(), appointmentId, appointment.status(),
@@ -148,23 +162,25 @@ public class EncounterService {
 
     @Transactional
     public EncounterResponse examination(UUID id, ExaminationRequest request) {
-        return step(id, current -> examinationStep.execute(current, request.examinationSummary()));
+        return step(id, request.weightKg(), request.temperatureC(),
+                (current, flow) -> examinationStep.execute(current, request.examinationSummary(), flow));
     }
 
     @Transactional
     public EncounterResponse diagnosis(UUID id, DiagnosisRequest request) {
-        return step(id, current -> diagnosisStep.execute(current, request.assessment()));
+        return step(id, null, null, (current, flow) -> diagnosisStep.execute(current, request.assessment(), flow));
     }
 
     @Transactional
     public EncounterResponse plan(UUID id, PlanRequest request) {
-        return step(id, current -> planStep.execute(current, new PlanStep.Input(request.treatmentPlan(), request.followUpAt())));
+        return step(id, null, null, (current, flow) ->
+                planStep.execute(current, new PlanStep.Input(request.treatmentPlan(), request.followUpAt()), flow));
     }
 
     @Transactional
     public EncounterResponse close(UUID id, CloseEncounterRequest request) {
         TenantContext.ContextValues ctx = TenantContext.require();
-        EncounterResponse current = loadForWrite(id);
+        EncounterResponse current = withTreatments(loadForWrite(id));
         veterinarians.requireCurrentVeterinarianId();
         AppointmentRow linkedAppointment = null;
         if (current.appointmentId() != null) {
@@ -174,7 +190,8 @@ public class EncounterService {
                 throw new ConflictException("Muayene yalnızca IN_PROGRESS durumundaki randevu için kapatılabilir.");
             }
         }
-        EncounterResponse closed = closeStep.execute(current, request == null ? null : request.vetNotes());
+        EncounterResponse closed = closeStep.execute(current, request == null ? null : request.vetNotes(),
+                flows.forType(current.encounterType()));
         repository.updateContent(closed);
 
         audit.record("ENCOUNTER_CLOSE", "ENCOUNTER", id, current.clinicId());
@@ -185,7 +202,7 @@ public class EncounterService {
             events.publishEvent(new AppointmentStatusChangedEvent(ctx.organizationId(), linkedAppointment.id(),
                     "IN_PROGRESS", "COMPLETED", linkedAppointment.clinicId()));
         }
-        return details(repository.findById(id).orElseThrow());
+        return details(repository.findById(id).orElseThrow()).withWarnings(closed.warnings());
     }
 
     /** Kapatılmamış muayenenin alanlarını (durumu değiştirmeden) günceller. */
@@ -203,6 +220,7 @@ public class EncounterService {
                 pick(request.vetNotes(), current.vetNotes(), null),
                 request.followUpAt() != null ? request.followUpAt() : current.followUpAt());
         repository.updateContent(updated);
+        saveVitals(id, request.weightKg(), request.temperatureC());
         return details(repository.findById(id).orElseThrow());
     }
 
@@ -223,7 +241,7 @@ public class EncounterService {
             throw new ConflictException("Kapatılmış muayene silinemez.");
         }
         if (repository.countDependents(id) > 0) {
-            throw new ConflictException("Muayeneye bağlı kayıtlar (tedavi, aşı, addendum, ek dosya) olduğu için silinemez.");
+            throw new ConflictException("Muayeneye bağlı kayıtlar (tedavi, reçete, aşı, addendum, ek dosya) olduğu için silinemez.");
         }
         repository.delete(id);
         audit.record("ENCOUNTER_DELETE", "ENCOUNTER", id, current.clinicId());
@@ -299,7 +317,8 @@ public class EncounterService {
         return encounter;
     }
 
-    private EncounterResponse start(UUID animalId, UUID appointmentId, String type, String complaint, String history) {
+    private EncounterResponse start(UUID animalId, UUID appointmentId, String requestedType, String complaint, String history,
+                                    BigDecimal weightKg, BigDecimal temperatureC) {
         TenantContext.ContextValues ctx = TenantContext.require();
         UUID vetId = veterinarians.requireCurrentVeterinarianId();
         if (!repository.animalVisible(animalId)) {
@@ -310,24 +329,51 @@ public class EncounterService {
         }
         UUID id = UUID.randomUUID();
         String number = "E-%06d".formatted(sequences.next(ctx.organizationId(), "ENCOUNTER"));
+        String type = requestedType == null ? "CONSULTATION" : requestedType;
         EncounterResponse draft = new EncounterResponse(id, number, animalId, null, null, ctx.clinicId(), appointmentId, vetId,
-                type == null ? "CONSULTATION" : type, null, OffsetDateTime.now(), null, null, null, null, null, null, null,
-                null, ctx.userId(), null, null, List.of(), List.of());
-        EncounterResponse admitted = admissionStep.execute(draft, new AdmissionStep.Input(complaint, history));
+                type, null, OffsetDateTime.now(), null, null, null, null, null, null, null,
+                null, ctx.userId(), null, null, List.of(), List.of()).withVitals(weightKg, temperatureC);
+        EncounterResponse admitted = admissionStep.execute(draft, new AdmissionStep.Input(complaint, history),
+                flows.forType(type));
         try {
             repository.insert(ctx.organizationId(), admitted);
         } catch (DuplicateKeyException ex) {
             throw new ConflictException("Bu randevu için zaten açık bir muayene var.");
         }
-        return details(repository.findById(id).orElseThrow());
+        saveVitals(id, weightKg, temperatureC);
+        return details(repository.findById(id).orElseThrow()).withWarnings(admitted.warnings());
     }
 
-    private EncounterResponse step(UUID id, java.util.function.UnaryOperator<EncounterResponse> action) {
-        EncounterResponse current = loadForWrite(id);
+    /**
+     * Adım yürütücü: türün akışını seçer, istekteki ölçümleri (verildiyse) adım denetiminden önce uygular,
+     * adımı çalıştırır ve kaydeder. Yanıt, akış kancasının uyarılarını taşır.
+     */
+    private EncounterResponse step(UUID id, BigDecimal weightKg, BigDecimal temperatureC,
+                                   BiFunction<EncounterResponse, EncounterFlow, EncounterResponse> action) {
+        EncounterResponse current = withTreatments(loadForWrite(id));
         veterinarians.requireCurrentVeterinarianId();
-        EncounterResponse next = action.apply(current);
+        EncounterResponse measured = current.withVitals(weightKg != null ? weightKg : current.weightKg(),
+                temperatureC != null ? temperatureC : current.temperatureC());
+        EncounterResponse next = action.apply(measured, flows.forType(current.encounterType()));
         repository.updateContent(next);
-        return details(repository.findById(id).orElseThrow());
+        saveVitals(id, weightKg, temperatureC);
+        return details(repository.findById(id).orElseThrow()).withWarnings(next.warnings());
+    }
+
+    private void saveVitals(UUID encounterId, BigDecimal weightKg, BigDecimal temperatureC) {
+        TenantContext.ContextValues ctx = TenantContext.require();
+        if (weightKg != null) {
+            repository.saveVital(ctx.organizationId(), encounterId, EncounterJdbcRepository.WEIGHT_KG, weightKg, "kg", ctx.userId());
+        }
+        if (temperatureC != null) {
+            repository.saveVital(ctx.organizationId(), encounterId, EncounterJdbcRepository.TEMPERATURE_C, temperatureC, "°C",
+                    ctx.userId());
+        }
+    }
+
+    /** Akış "uygulanan işlem" zorunluluğunu tedavi kalemlerinden denetler. */
+    private EncounterResponse withTreatments(EncounterResponse encounter) {
+        return encounter.withDetails(List.of(), repository.findTreatments(encounter.id()));
     }
 
     private void requireOpen(EncounterResponse encounter) {

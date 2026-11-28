@@ -24,7 +24,11 @@ public class EncounterJdbcRepository {
             select e.id, e.encounter_no, e.animal_id, a.name as animal_name, a.patient_no, e.clinic_id, e.appointment_id,
                    e.attending_vet_id, e.encounter_type, e.status, e.started_at, e.ended_at, e.chief_complaint,
                    e.history_text, e.examination_summary, e.assessment_text, e.treatment_plan, e.vet_notes,
-                   e.follow_up_at, e.created_by, e.created_at, e.updated_at
+                   e.follow_up_at, e.created_by, e.created_at, e.updated_at,
+                   (select v.numeric_value from vet.encounter_vitals v where v.organization_id = e.organization_id
+                      and v.encounter_id = e.id and v.metric_code = 'WEIGHT_KG' order by v.measured_at desc limit 1) as weight_kg,
+                   (select v.numeric_value from vet.encounter_vitals v where v.organization_id = e.organization_id
+                      and v.encounter_id = e.id and v.metric_code = 'TEMPERATURE_C' order by v.measured_at desc limit 1) as temperature_c
             from vet.encounters e
             join vet.animals a on a.organization_id = e.organization_id and a.id = e.animal_id
             """;
@@ -53,8 +57,23 @@ public class EncounterJdbcRepository {
             rs.getObject("created_at", OffsetDateTime.class),
             rs.getObject("updated_at", OffsetDateTime.class),
             List.of(),
+            List.of(),
+            stripped(rs.getBigDecimal("weight_kg")),
+            stripped(rs.getBigDecimal("temperature_c")),
             List.of()
     );
+
+    /** Ölçümler; yalnızca değer değiştiyse yeni satır eklenir (son ölçüm geçerlidir). */
+    public static final String WEIGHT_KG = "WEIGHT_KG";
+    public static final String TEMPERATURE_C = "TEMPERATURE_C";
+
+    private static BigDecimal stripped(BigDecimal value) {
+        if (value == null) {
+            return null;
+        }
+        BigDecimal plain = value.stripTrailingZeros();
+        return plain.scale() < 0 ? plain.setScale(0) : plain;
+    }
 
     private static final RowMapper<AddendumResponse> ADDENDUM_MAPPER = (rs, i) -> new AddendumResponse(
             rs.getObject("id", UUID.class), rs.getObject("encounter_id", UUID.class), rs.getObject("clinic_id", UUID.class),
@@ -136,6 +155,16 @@ public class EncounterJdbcRepository {
                 v.assessment(), v.treatmentPlan(), v.vetNotes(), v.followUpAt(), v.id());
     }
 
+    public void saveVital(UUID organizationId, UUID encounterId, String metric, BigDecimal value, String unit, UUID userId) {
+        jdbc.update("""
+                insert into vet.encounter_vitals (organization_id, encounter_id, metric_code, numeric_value, unit, recorded_by)
+                select ?, ?, ?, ?, ?, ?
+                where not exists (select 1 from (select numeric_value from vet.encounter_vitals
+                                                 where encounter_id = ? and metric_code = ? order by measured_at desc limit 1) last
+                                  where last.numeric_value = ?)
+                """, organizationId, encounterId, metric, value, unit, userId, encounterId, metric, value);
+    }
+
     public void delete(UUID id) {
         jdbc.update("delete from vet.encounters where id = ?", id);
     }
@@ -166,7 +195,8 @@ public class EncounterJdbcRepository {
                      + (select count(*) from vet.encounter_addenda where encounter_id = ?)
                      + (select count(*) from vet.vaccine_records where encounter_id = ?)
                      + (select count(*) from vet.clinical_documents where encounter_id = ?)
-                """, Long.class, encounterId, encounterId, encounterId, encounterId);
+                     + (select count(*) from vet.prescriptions where encounter_id = ?)
+                """, Long.class, encounterId, encounterId, encounterId, encounterId, encounterId);
         return n == null ? 0 : n;
     }
 

@@ -4,7 +4,10 @@ import jakarta.validation.Valid;
 import org.codeflow.veterineryproject.auth.security.Permission;
 import org.codeflow.veterineryproject.common.pagination.PageResponse;
 import org.codeflow.veterineryproject.common.pagination.PaginationUtils;
+import org.codeflow.veterineryproject.vaccine.dto.AnimalVaccineScheduleResponse;
 import org.codeflow.veterineryproject.vaccine.dto.CreateProtocolRequest;
+import org.codeflow.veterineryproject.vaccine.dto.GenerateProtocolsRequest;
+import org.codeflow.veterineryproject.vaccine.dto.UpdateProtocolRequest;
 import org.codeflow.veterineryproject.vaccine.dto.DueVaccineResponse;
 import org.codeflow.veterineryproject.vaccine.dto.ProtocolResponse;
 import org.codeflow.veterineryproject.vaccine.dto.RecordVaccineRequest;
@@ -18,6 +21,7 @@ import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -25,6 +29,7 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestController;
 
+import java.util.List;
 import java.util.UUID;
 
 @RestController
@@ -49,6 +54,28 @@ public class VaccineController {
     @PreAuthorize(MANAGE)
     public ProtocolResponse createProtocol(@Valid @RequestBody CreateProtocolRequest request) {
         return protocols.create(request);
+    }
+
+    /** FG-D1: türün fabrika taslağı (onaysız protokoller). */
+    @PostMapping("/vaccine-protocols/generate")
+    @ResponseStatus(HttpStatus.CREATED)
+    @PreAuthorize(MANAGE)
+    public List<ProtocolResponse> generate(@Valid @RequestBody GenerateProtocolsRequest request) {
+        return protocols.generate(request);
+    }
+
+    /** FG-D2: kalem değişikliği yeni taslak sürüm oluşturur ve onayı sıfırlar. */
+    @PutMapping("/vaccine-protocols/{id}")
+    @PreAuthorize(MANAGE)
+    public ProtocolResponse update(@PathVariable UUID id, @Valid @RequestBody UpdateProtocolRequest request) {
+        return protocols.update(id, request);
+    }
+
+    @DeleteMapping("/vaccine-protocols/{id}")
+    @ResponseStatus(HttpStatus.NO_CONTENT)
+    @PreAuthorize(MANAGE)
+    public void deleteDraft(@PathVariable UUID id) {
+        protocols.deleteDraft(id);
     }
 
     @GetMapping("/vaccine-protocols")
@@ -84,6 +111,13 @@ public class VaccineController {
     @PreAuthorize(READ)
     public VaccineScheduleTemplate template(@PathVariable UUID animalId) {
         return protocols.templateFor(animalId);
+    }
+
+    /** FG-D4: hastanın aşı takvimi (planlanan / uygulanan / geciken dozlar ve en yakın vade). */
+    @GetMapping("/animals/{animalId}/vaccine-schedule")
+    @PreAuthorize(READ)
+    public AnimalVaccineScheduleResponse schedule(@PathVariable UUID animalId) {
+        return protocols.scheduleFor(animalId);
     }
 
     @PostMapping("/vaccinations")

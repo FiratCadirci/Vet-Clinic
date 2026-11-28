@@ -9,6 +9,7 @@ import org.codeflow.veterineryproject.encounter.dto.AddendumResponse;
 import org.codeflow.veterineryproject.encounter.dto.CloseEncounterRequest;
 import org.codeflow.veterineryproject.encounter.dto.CreateEncounterRequest;
 import org.codeflow.veterineryproject.encounter.dto.DiagnosisRequest;
+import org.codeflow.veterineryproject.encounter.dto.EncounterFlowResponse;
 import org.codeflow.veterineryproject.encounter.dto.EncounterResponse;
 import org.codeflow.veterineryproject.encounter.dto.EncounterStatus;
 import org.codeflow.veterineryproject.encounter.dto.ExaminationRequest;
@@ -81,6 +82,13 @@ public class EncounterController {
             @RequestParam(required = false) Integer size
     ) {
         return service.list(animalId, status, PaginationUtils.createPageable(page, size));
+    }
+
+    /** Muayene türlerine göre akış tanımları (Template Method kancalarının istemciye açılan özeti). */
+    @GetMapping("/encounter-flows")
+    @PreAuthorize(READ)
+    public List<EncounterFlowResponse> flows() {
+        return service.flowDefinitions();
     }
 
     @GetMapping("/encounters/{id}")

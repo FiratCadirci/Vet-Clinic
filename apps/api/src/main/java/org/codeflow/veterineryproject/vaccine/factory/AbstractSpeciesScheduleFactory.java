@@ -11,11 +11,30 @@ import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
 
-/** Ortak şablon üretimi; türlere özgü kural: ilk doz için en erken yaş. */
+/**
+ * Ortak şablon üretimi; türlere özgü kurallar: ilk doz için en erken yaş ve varsayılan aşı serileri.
+ * {@link #createDraft()} ortak işi (doğrulama, sıralama) yapar; hangi serilerin üretileceğine alt sınıfların
+ * ezdiği fabrika metodu {@link #defaultSchedule()} karar verir. Yeni tür için yalnızca yeni alt sınıf yazılır.
+ */
 abstract class AbstractSpeciesScheduleFactory implements VaccineScheduleFactory {
 
     /** İlk dozun uygulanabileceği en erken yaş (gün). */
     protected abstract int minimumFirstDoseAgeDays();
+
+    /** Fabrika metodu: türün varsayılan aşı serileri (Türkiye'deki yaygın uygulamaya göre öneri). */
+    protected abstract List<ProtocolDraft> defaultSchedule();
+
+    @Override
+    public final List<ProtocolDraft> createDraft() {
+        List<ProtocolDraft> drafts = new ArrayList<>(defaultSchedule());
+        for (ProtocolDraft d : drafts) {
+            if (d.doseCount() < 1 || d.doseIntervalDays() < 1 || d.boosterIntervalDays() < 1 || d.firstDoseAgeDays() < 0) {
+                throw new IllegalStateException("Geçersiz takvim satırı: " + d.vaccineName());
+            }
+        }
+        drafts.sort(Comparator.comparingInt(ProtocolDraft::firstDoseAgeDays).thenComparing(ProtocolDraft::code));
+        return List.copyOf(drafts);
+    }
 
     protected boolean appliesTo(String protocolSpeciesCode, String animalSpeciesCode) {
         return protocolSpeciesCode != null && protocolSpeciesCode.equalsIgnoreCase(animalSpeciesCode);

@@ -15,11 +15,6 @@ public class PlanStep extends EncounterStep<PlanStep.Input> {
     }
 
     @Override
-    protected EncounterStatus requiredStatus() {
-        return EncounterStatus.DIAGNOSIS;
-    }
-
-    @Override
     protected EncounterStatus targetStatus() {
         return EncounterStatus.PLAN;
     }
@@ -31,7 +26,6 @@ public class PlanStep extends EncounterStep<PlanStep.Input> {
 
     @Override
     protected void validate(EncounterResponse current, Input input) {
-        require(input.treatmentPlan(), "Tedavi planı zorunludur.");
         if (input.followUpAt() != null && input.followUpAt().isBefore(current.startedAt())) {
             throw new BusinessRuleException("Kontrol tarihi muayene başlangıcından önce olamaz.");
         }

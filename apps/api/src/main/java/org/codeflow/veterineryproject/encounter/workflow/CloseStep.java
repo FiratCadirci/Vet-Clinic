@@ -11,11 +11,6 @@ import java.time.OffsetDateTime;
 public class CloseStep extends EncounterStep<String> {
 
     @Override
-    protected EncounterStatus requiredStatus() {
-        return EncounterStatus.PLAN;
-    }
-
-    @Override
     protected EncounterStatus targetStatus() {
         return EncounterStatus.CLOSED;
     }
@@ -23,14 +18,6 @@ public class CloseStep extends EncounterStep<String> {
     @Override
     protected String stepName() {
         return "kapatma";
-    }
-
-    @Override
-    protected void validate(EncounterResponse current, String vetNotes) {
-        require(current.chiefComplaint(), "Şikâyet olmadan muayene kapatılamaz.");
-        require(current.examinationSummary(), "Fizik muayene bulgusu olmadan muayene kapatılamaz.");
-        require(current.assessment(), "Tanı olmadan muayene kapatılamaz.");
-        require(current.treatmentPlan(), "Tedavi planı olmadan muayene kapatılamaz.");
     }
 
     @Override

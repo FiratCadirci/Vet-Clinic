@@ -9,5 +9,6 @@ public record VaccineRecordResponse(UUID id, UUID animalId, UUID encounterId, UU
                                     String vaccineName, String batchNumber, OffsetDateTime administeredAt,
                                     UUID administeredBy, BigDecimal dose, String doseUnit, String route,
                                     String administrationSite, String certificateNo, String notes, LocalDate nextDueAt,
-                                    String nextDueSource, UUID createdBy, OffsetDateTime createdAt) {
+                                    String nextDueSource, UUID createdBy, OffsetDateTime createdAt,
+                                    UUID vaccineProductId, UUID lotId) {
 }

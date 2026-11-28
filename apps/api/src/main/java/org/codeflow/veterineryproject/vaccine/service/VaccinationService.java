@@ -10,6 +10,9 @@ import org.codeflow.veterineryproject.common.tenant.TenantContext;
 import org.codeflow.veterineryproject.encounter.dto.EncounterResponse;
 import org.codeflow.veterineryproject.encounter.dto.EncounterStatus;
 import org.codeflow.veterineryproject.encounter.service.EncounterService;
+import org.codeflow.veterineryproject.inventory.dto.InventoryDto.ConsumptionResult;
+import org.codeflow.veterineryproject.inventory.dto.InventoryDto.LotAllocation;
+import org.codeflow.veterineryproject.inventory.service.StockConsumptionService;
 import org.codeflow.veterineryproject.user.service.VeterinarianService;
 import org.codeflow.veterineryproject.vaccine.dto.DueVaccineResponse;
 import org.codeflow.veterineryproject.vaccine.dto.ProtocolDoseResponse;
@@ -18,12 +21,14 @@ import org.codeflow.veterineryproject.vaccine.dto.RecordVaccineRequest;
 import org.codeflow.veterineryproject.vaccine.dto.VaccineRecordResponse;
 import org.codeflow.veterineryproject.vaccine.factory.NextDoseCalculator;
 import org.codeflow.veterineryproject.vaccine.repository.VaccineJdbcRepository;
+import org.codeflow.veterineryproject.vaccine.repository.VaccineJdbcRepository.VaccineProduct;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.time.OffsetDateTime;
 import java.util.List;
@@ -35,20 +40,27 @@ import java.util.UUID;
 public class VaccinationService {
 
     private static final Set<String> DUE_STATUSES = Set.of("OVERDUE", "UPCOMING", "ALL");
+    private static final String VACCINE_PRODUCT = "VACCINE";
+    private static final String STOCK_REFERENCE = "VACCINE_RECORD";
+    /** Bir aşı uygulaması stoktan bir birim (flakon/doz) düşer. */
+    private static final BigDecimal ONE_UNIT = BigDecimal.ONE;
 
     private final VaccineJdbcRepository repository;
     private final EncounterService encounterService;
     private final VeterinarianService veterinarians;
     private final AuditRecorder audit;
     private final ApplicationEventPublisher events;
+    private final StockConsumptionService stock;
 
     public VaccinationService(VaccineJdbcRepository repository, EncounterService encounterService,
-                              VeterinarianService veterinarians, AuditRecorder audit, ApplicationEventPublisher events) {
+                              VeterinarianService veterinarians, AuditRecorder audit, ApplicationEventPublisher events,
+                              StockConsumptionService stock) {
         this.repository = repository;
         this.encounterService = encounterService;
         this.veterinarians = veterinarians;
         this.audit = audit;
         this.events = events;
+        this.stock = stock;
     }
 
     @Transactional
@@ -62,6 +74,9 @@ public class VaccinationService {
         }
         if (encounter.status() == EncounterStatus.CLOSED) {
             throw new ConflictException("Kapatılmış muayeneye aşı kaydı eklenemez.");
+        }
+        if (repository.animalDeceased(encounter.animalId())) {
+            throw new ConflictException("Vefat etmiş hastaya aşı kaydı eklenemez.", "PATIENT_DECEASED", java.util.Map.of());
         }
         UUID vetId = veterinarians.requireCurrentVeterinarianId();
 
@@ -87,6 +102,15 @@ public class VaccinationService {
                 vaccineName = dose.vaccineName();
             }
         }
+        VaccineProduct product = null;
+        if (request.productId() != null) {
+            product = repository.findProduct(request.productId())
+                    .filter(p -> VACCINE_PRODUCT.equals(p.productType()))
+                    .orElseThrow(() -> new BusinessRuleException("Aşı ürünü bulunamadı."));
+            if (vaccineName == null) {
+                vaccineName = product.name();
+            }
+        }
         if (vaccineName == null) {
             throw new BusinessRuleException("Aşı adı veya protokol dozu zorunludur.");
         }
@@ -106,11 +130,27 @@ public class VaccinationService {
             source = computed.isPresent() ? "TEMPLATE" : "NONE";
         }
 
-        UUID id = repository.insertRecord(ctx.organizationId(), encounter.animalId(), encounter.id(), encounter.clinicId(),
-                request.protocolDoseId(), vaccineName, blankToNull(request.batchNumber()), administeredAt, vetId,
+        UUID id = UUID.randomUUID();
+        String batchNumber = blankToNull(request.batchNumber());
+        UUID lotId = null;
+        UUID transactionId = null;
+        if (product != null) {
+            // FG-D3: aynı transaction içinde FEFO ile düşülür; yetersiz stokta 409 ve kayıt dahil hiçbir şey yazılmaz.
+            // Stok servisi belirli lot seçtirmez: lot takipli üründe kayda gerçekten düşülen (FEFO) lot yazılır,
+            // elle girilen lot numarası bu durumda dikkate alınmaz (kayıt ile stok hareketi tutarlı kalır).
+            ConsumptionResult consumed = stock.consume(encounter.clinicId(), product.id(), ONE_UNIT, STOCK_REFERENCE, id);
+            transactionId = consumed.transactionId();
+            Optional<LotAllocation> lot = consumed.allocations().stream().filter(a -> a.lotId() != null).findFirst();
+            if (lot.isPresent()) {
+                lotId = lot.get().lotId();
+                batchNumber = lot.get().lotNumber();
+            }
+        }
+        repository.insertRecord(id, ctx.organizationId(), encounter.animalId(), encounter.id(), encounter.clinicId(),
+                request.protocolDoseId(), vaccineName, batchNumber, administeredAt, vetId,
                 request.dose(), blankToNull(request.doseUnit()), blankToNull(request.route()),
                 blankToNull(request.administrationSite()), blankToNull(request.certificateNo()), blankToNull(request.notes()),
-                nextDue, source, ctx.userId());
+                nextDue, source, ctx.userId(), product == null ? null : product.id(), lotId, transactionId);
         audit.record("VACCINE_RECORD_CREATE", "VACCINE_RECORD", id, encounter.clinicId());
         events.publishEvent(new VaccineRecordedEvent(ctx.organizationId(), id, encounter.animalId(), encounter.id(),
                 encounter.clinicId(), nextDue));

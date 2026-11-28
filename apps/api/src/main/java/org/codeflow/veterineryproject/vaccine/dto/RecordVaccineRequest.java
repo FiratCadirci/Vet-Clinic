@@ -21,6 +21,8 @@ public record RecordVaccineRequest(
         @Size(max = 120) String administrationSite,
         @Size(max = 100) String certificateNo,
         @Size(max = 2000) String notes,
-        LocalDate nextDueAt
+        LocalDate nextDueAt,
+        /** Seçilirse şube stoğundan 1 birim FEFO ile düşülür; lot takipli üründe kayda düşülen lot yazılır. */
+        UUID productId
 ) {
 }
