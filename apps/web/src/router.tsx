@@ -10,6 +10,7 @@ const AppointmentsPage = lazy(() => import('./pages/appointments/AppointmentsPag
 const AuditPage = lazy(() => import('./pages/audit/AuditPage').then((m) => ({ default: m.AuditPage })));
 const AcceptInvitePage = lazy(() => import('./pages/auth/AcceptInvitePage').then((m) => ({ default: m.AcceptInvitePage })));
 const SignupPage = lazy(() => import('./pages/auth/SignupPage').then((m) => ({ default: m.SignupPage })));
+const DashboardPage = lazy(() => import('./pages/dashboard/DashboardPage').then((m) => ({ default: m.DashboardPage })));
 const InventoryPage = lazy(() => import('./pages/inventory/InventoryPage').then((m) => ({ default: m.InventoryPage })));
 const OwnerDetailPage = lazy(() => import('./pages/patients/OwnerDetailPage').then((m) => ({ default: m.OwnerDetailPage })));
 const PatientDetailPage = lazy(() => import('./pages/patients/PatientDetailPage').then((m) => ({ default: m.PatientDetailPage })));
@@ -40,7 +41,7 @@ export const router = createBrowserRouter([
   {
     element: <AppLayout area="clinic" />,
     children: [
-      { path: '/', element: <Placeholder title="Genel bakış" /> },
+      { path: '/', element: page(<DashboardPage />) },
       { path: '/appointments', element: page(<AppointmentsPage />) },
       { path: '/patients', element: page(<PatientsPage />) },
       { path: '/patients/:id', element: page(<PatientDetailPage />) },
