@@ -4,6 +4,7 @@ import org.codeflow.veterineryproject.vaccine.dto.DueVaccineResponse;
 import org.codeflow.veterineryproject.vaccine.dto.ProtocolDoseResponse;
 import org.codeflow.veterineryproject.vaccine.dto.ProtocolResponse;
 import org.codeflow.veterineryproject.vaccine.dto.VaccineRecordResponse;
+import org.codeflow.veterineryproject.vaccine.factory.VaccineScheduleCalculator.GivenVaccination;
 import org.codeflow.veterineryproject.vaccine.factory.VaccineScheduleFactory.AnimalProfile;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.jdbc.core.RowMapper;
@@ -37,7 +38,7 @@ public class VaccineJdbcRepository {
     private static final String RECORD_COLUMNS = """
             id, animal_id, encounter_id, clinic_id, protocol_dose_id, vaccine_name, batch_number, administered_at,
             administered_by, dose, dose_unit, route, administration_site, certificate_no, notes, next_due_at,
-            next_due_source, created_by, created_at
+            next_due_source, created_by, created_at, vaccine_product_id, lot_id
             """;
 
     private static final RowMapper<VaccineRecordResponse> RECORD_MAPPER = (rs, i) -> new VaccineRecordResponse(
@@ -47,7 +48,11 @@ public class VaccineJdbcRepository {
             rs.getObject("administered_by", UUID.class), rs.getObject("dose", BigDecimal.class), rs.getString("dose_unit"),
             rs.getString("route"), rs.getString("administration_site"), rs.getString("certificate_no"), rs.getString("notes"),
             rs.getObject("next_due_at", LocalDate.class), rs.getString("next_due_source"), rs.getObject("created_by", UUID.class),
-            rs.getObject("created_at", OffsetDateTime.class));
+            rs.getObject("created_at", OffsetDateTime.class), rs.getObject("vaccine_product_id", UUID.class),
+            rs.getObject("lot_id", UUID.class));
+
+    public record VaccineProduct(UUID id, String name, String productType) {
+    }
 
     private final JdbcTemplate jdbc;
 
@@ -134,6 +139,30 @@ public class VaccineJdbcRepository {
                 veterinarianId, id);
     }
 
+    public Optional<String> findSpeciesCode(UUID speciesId) {
+        return jdbc.queryForList("select code from vet.species where id = ?", String.class, speciesId).stream().findFirst();
+    }
+
+    /** Kodun emekliye ayrılmamış (taslak veya onaylı) bir sürümü var mı? */
+    public boolean activeCodeExists(String code) {
+        Integer n = jdbc.queryForObject("select count(*) from vet.vaccine_protocols where code = ? and status <> 'RETIRED'",
+                Integer.class, code);
+        return n != null && n > 0;
+    }
+
+    public boolean dosesUsedByRecords(UUID protocolId) {
+        Integer n = jdbc.queryForObject("""
+                select count(*) from vet.vaccine_records r
+                join vet.vaccine_protocol_doses d on d.organization_id = r.organization_id and d.id = r.protocol_dose_id
+                where d.protocol_id = ?
+                """, Integer.class, protocolId);
+        return n != null && n > 0;
+    }
+
+    public void deleteProtocol(UUID id) {
+        jdbc.update("delete from vet.vaccine_protocols where id = ?", id);
+    }
+
     public void retire(UUID id) {
         jdbc.update("update vet.vaccine_protocols set status = 'RETIRED', updated_at = now() where id = ?", id);
     }
@@ -159,20 +188,45 @@ public class VaccineJdbcRepository {
         return jdbc.queryForList("select species_id from vet.animals where id = ?", UUID.class, animalId).stream().findFirst();
     }
 
-    public UUID insertRecord(UUID organizationId, UUID animalId, UUID encounterId, UUID clinicId, UUID protocolDoseId,
+    public Optional<VaccineProduct> findProduct(UUID productId) {
+        return jdbc.query("select id, name, product_type from vet.products where id = ? and is_active",
+                (rs, i) -> new VaccineProduct(rs.getObject("id", UUID.class), rs.getString("name"), rs.getString("product_type")),
+                productId).stream().findFirst();
+    }
+
+    public boolean animalDeceased(UUID animalId) {
+        return !jdbc.queryForList("select 1 from vet.animals where id = ? and deceased_at is not null", animalId).isEmpty();
+    }
+
+    /** Takvim hesabı için hastanın tüm aşı kayıtları; protokol dozuna bağlı kayıtlarda protokol kodu. */
+    public List<GivenVaccination> findGiven(UUID animalId) {
+        return jdbc.query("""
+                select r.id, p.code as protocol_code, r.vaccine_name, r.administered_at, r.next_due_at
+                from vet.vaccine_records r
+                left join vet.vaccine_protocol_doses d on d.organization_id = r.organization_id and d.id = r.protocol_dose_id
+                left join vet.vaccine_protocols p on p.organization_id = d.organization_id and p.id = d.protocol_id
+                where r.animal_id = ?
+                order by r.administered_at, r.created_at
+                """, (rs, i) -> new GivenVaccination(
+                rs.getObject("id", UUID.class), rs.getString("protocol_code"), rs.getString("vaccine_name"),
+                rs.getObject("administered_at", OffsetDateTime.class), rs.getObject("next_due_at", LocalDate.class)), animalId);
+    }
+
+    public void insertRecord(UUID id, UUID organizationId, UUID animalId, UUID encounterId, UUID clinicId, UUID protocolDoseId,
                              String vaccineName, String batchNumber, OffsetDateTime administeredAt, UUID administeredBy,
                              BigDecimal dose, String doseUnit, String route, String site, String certificateNo, String notes,
-                             LocalDate nextDueAt, String nextDueSource, UUID createdBy) {
-        UUID id = UUID.randomUUID();
+                             LocalDate nextDueAt, String nextDueSource, UUID createdBy, UUID productId, UUID lotId,
+                             UUID inventoryTransactionId) {
         jdbc.update("""
                 insert into vet.vaccine_records (id, organization_id, animal_id, encounter_id, clinic_id, protocol_dose_id,
                     vaccine_name, batch_number, administered_at, administered_by, dose, dose_unit, route, administration_site,
-                    certificate_no, notes, next_due_at, next_due_source, created_by)
-                values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    certificate_no, notes, next_due_at, next_due_source, created_by, vaccine_product_id, lot_id,
+                    inventory_transaction_id)
+                values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """, id, organizationId, animalId, encounterId, clinicId, protocolDoseId, vaccineName, batchNumber,
                 administeredAt, administeredBy, dose, doseUnit, route, site, certificateNo, notes,
-                nextDueAt == null ? null : Date.valueOf(nextDueAt), nextDueSource, createdBy);
-        return id;
+                nextDueAt == null ? null : Date.valueOf(nextDueAt), nextDueSource, createdBy, productId, lotId,
+                inventoryTransactionId);
     }
 
     public Optional<VaccineRecordResponse> findRecord(UUID id) {
@@ -201,13 +255,30 @@ public class VaccineJdbcRepository {
     /** Aşı adı başına en son kayıt değerlendirilir; yeni doz kaydı eski vadeyi kapatır. */
     private static final String DUE_BASE = """
             select l.id, l.animal_id, a.name as animal_name, a.patient_no, l.clinic_id, l.vaccine_name, l.administered_at,
-                   l.next_due_at, (current_date - l.next_due_at) as days_overdue
+                   l.next_due_at, (current_date - l.next_due_at) as days_overdue, s.code as species_code,
+                   o.display_name as owner_name, o.phone as owner_phone,
+                   (select d.dose_number from vet.vaccine_protocol_doses d
+                     where d.organization_id = l.organization_id and d.id = l.protocol_dose_id) as dose_number,
+                   (select max(rd.created_at) from vet.vaccine_reminder_dispatches rd
+                     where rd.organization_id = l.organization_id and rd.vaccine_record_id = l.id) as reminder_sent_at
             from (
                 select distinct on (vr.animal_id, lower(vr.vaccine_name)) vr.*
                 from vet.vaccine_records vr
                 order by vr.animal_id, lower(vr.vaccine_name), vr.administered_at desc, vr.created_at desc
             ) l
             join vet.animals a on a.organization_id = l.organization_id and a.id = l.animal_id
+            join vet.species s on s.id = a.species_id
+            left join lateral (
+                select c.display_name,
+                       (select cc.contact_value from vet.client_contacts cc
+                         where cc.organization_id = c.organization_id and cc.client_id = c.id and cc.contact_type = 'PHONE'
+                         order by cc.is_primary desc, cc.created_at limit 1) as phone
+                from vet.animal_owners ao
+                join vet.clients c on c.organization_id = ao.organization_id and c.id = ao.client_id
+                where ao.organization_id = a.organization_id and ao.animal_id = a.id and ao.valid_to is null
+                order by ao.is_primary_contact desc, ao.created_at
+                limit 1
+            ) o on true
             where a.deceased_at is null and l.next_due_at is not null
             """;
 
@@ -221,7 +292,9 @@ public class VaccineJdbcRepository {
             return new DueVaccineResponse(rs.getObject("id", UUID.class), rs.getObject("animal_id", UUID.class),
                     rs.getString("animal_name"), rs.getString("patient_no"), rs.getObject("clinic_id", UUID.class),
                     rs.getString("vaccine_name"), rs.getObject("administered_at", OffsetDateTime.class),
-                    rs.getObject("next_due_at", LocalDate.class), overdue > 0 ? "OVERDUE" : "UPCOMING", overdue);
+                    rs.getObject("next_due_at", LocalDate.class), overdue > 0 ? "OVERDUE" : "UPCOMING", overdue,
+                    rs.getString("species_code"), rs.getString("owner_name"), rs.getString("owner_phone"),
+                    rs.getObject("dose_number", Integer.class), rs.getObject("reminder_sent_at", OffsetDateTime.class));
         }, args.toArray());
     }
 

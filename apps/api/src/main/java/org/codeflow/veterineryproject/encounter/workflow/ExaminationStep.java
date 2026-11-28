@@ -9,11 +9,6 @@ import org.springframework.stereotype.Component;
 public class ExaminationStep extends EncounterStep<String> {
 
     @Override
-    protected EncounterStatus requiredStatus() {
-        return EncounterStatus.ADMISSION;
-    }
-
-    @Override
     protected EncounterStatus targetStatus() {
         return EncounterStatus.EXAMINATION;
     }
@@ -21,11 +16,6 @@ public class ExaminationStep extends EncounterStep<String> {
     @Override
     protected String stepName() {
         return "inceleme";
-    }
-
-    @Override
-    protected void validate(EncounterResponse current, String examinationSummary) {
-        require(examinationSummary, "Fizik muayene bulgusu zorunludur.");
     }
 
     @Override
