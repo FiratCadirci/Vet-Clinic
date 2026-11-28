@@ -147,7 +147,8 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
                 || path.equals("/api/auth/signup/plans")
                 || path.equals("/api/auth/invitations/preview")
                 || path.equals("/api/auth/accept-invite")
-                || path.startsWith("/api/platform/auth/")
+                // Platform uçları ayrı zincirde PlatformAuthenticationFilter ile doğrulanır (bkz. PlatformSecurityConfig).
+                || path.startsWith("/api/platform/")
                 || path.startsWith("/v3/api-docs")
                 || path.startsWith("/swagger-ui")
                 || path.equals("/swagger-ui.html")
