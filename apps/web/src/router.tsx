@@ -13,6 +13,8 @@ const InventoryPage = lazy(() => import('./pages/inventory/InventoryPage').then(
 const OwnerDetailPage = lazy(() => import('./pages/patients/OwnerDetailPage').then((m) => ({ default: m.OwnerDetailPage })));
 const PatientDetailPage = lazy(() => import('./pages/patients/PatientDetailPage').then((m) => ({ default: m.PatientDetailPage })));
 const PatientsPage = lazy(() => import('./pages/patients/PatientsPage').then((m) => ({ default: m.PatientsPage })));
+const SaleDetailPage = lazy(() => import('./pages/sales/SaleDetailPage').then((m) => ({ default: m.SaleDetailPage })));
+const SalesPage = lazy(() => import('./pages/sales/SalesPage').then((m) => ({ default: m.SalesPage })));
 const SettingsPage = lazy(() => import('./pages/settings/SettingsPage').then((m) => ({ default: m.SettingsPage })));
 const StaffPage = lazy(() => import('./pages/staff/StaffPage').then((m) => ({ default: m.StaffPage })));
 
@@ -45,8 +47,8 @@ export const router = createBrowserRouter([
       { path: '/examinations/:id', element: <Placeholder title="Muayene" /> },
       { path: '/vaccines', element: <Placeholder title="Aşılar" /> },
       { path: '/inventory', element: page(<InventoryPage />) },
-      { path: '/sales', element: <Placeholder title="Satış ve fatura" /> },
-      { path: '/sales/:id', element: <Placeholder title="Satış" /> },
+      { path: '/sales', element: page(<SalesPage />) },
+      { path: '/sales/:id', element: page(<SaleDetailPage />) },
       { path: '/reports', element: <Placeholder title="Raporlar" /> },
       { path: '/staff', element: page(<StaffPage />) },
       { path: '/settings', element: page(<SettingsPage />) },
